@@ -1,32 +1,49 @@
+#!/usr/bin/env node
 /**
  * deploy-init.mjs — Inicialización automática de la base de datos al hacer deploy.
  *
  * Se ejecuta automáticamente en el build (ver package.json → "build"), ANTES de
  * `next build`, y es IDEMPOTENTE (seguro de ejecutar cuantas veces sea necesario):
  *
- *   1. SCHEMA   → si las tablas no existen, las crea (prisma db push).
- *                 Si ya existen, intenta una sincronización segura sin perder datos.
- *   2. DATOS    → si la base está vacía (sin roles), carga el seed completo.
- *                 Si ya hay datos base, NO los vuelve a cargar.
- *   3. DEMO     → garantiza que exista UN usuario demo por cada rol
- *                 (los crea solo si no existen; nunca duplica ni sobrescribe).
+ *   PASO 1 · SCHEMA  → si las tablas NO existen, las crea (prisma db push).
+ *                      Si ya existen, intenta una sincronización segura sin perder datos.
+ *   PASO 2 · DATOS   → si la base está vacía (sin roles), carga el seed completo.
+ *                      Si ya hay datos base, NO los vuelve a cargar (seed omitido).
+ *   PASO 3 · DEMO    → garantiza UN usuario demo por cada rol
+ *                      (crea solo los que falten; nunca duplica ni sobrescribe).
  *
- * Nunca interrumpe el deploy: ante un error de BD registra una advertencia
- * clara y termina con código 0.
+ * Seguridad:
+ *   - Si faltan variables de conexión o no se pueden crear las tablas, el build
+ *     FALLA con un mensaje claro (es mejor que publicar una app rota con P2021).
+ *   - Errores de seed / usuarios demo solo advierten: no bloquean el deploy.
+ *   - SKIP_DEPLOY_INIT=1 omite toda la inicialización (emergencias).
  *
  * Variables de entorno que usa:
- *   DATABASE_URL / DIRECT_URL → conexión (Neon en producción)
- *   DEPLOY_PRISMA_SCHEMA      → (opcional) schema para `db push`;
- *                               por defecto prisma/schema.postgres.prisma
- *   SKIP_DEPLOY_INIT=1        → (opcional) omite toda la inicialización
+ *   DATABASE_URL  → conexión (Neon pooled en producción; file: en desarrollo)
+ *   DIRECT_URL    → conexión directa para DDL (Neon). Si falta, se intenta
+ *                   crear las tablas por la pooled como respaldo.
+ *   DEPLOY_PRISMA_SCHEMA → (opcional) schema para `db push`;
+ *                   por defecto prisma/schema.postgres.prisma
+ *   SKIP_DEPLOY_INIT=1   → (opcional) omite toda la inicialización
  */
-import { PrismaClient } from "@prisma/client";
-import { randomBytes, scryptSync } from "crypto";
 import { execSync } from "node:child_process";
+import { randomBytes, scryptSync } from "node:crypto";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
 
-const db = new PrismaClient();
-const SCHEMA = process.env.DEPLOY_PRISMA_SCHEMA || "prisma/schema.postgres.prisma";
+const SCHEMA_PG = "prisma/schema.postgres.prisma";
+const SCHEMA_SQLITE = "prisma/schema.prisma";
+const FALLBACK_SCHEMA_PATH = "node_modules/.deploy-init-schema.prisma";
 const DEMO_PASSWORD = "demo1234";
+
+const DATABASE_URL = process.env.DATABASE_URL || "";
+const DIRECT_URL = process.env.DIRECT_URL || "";
+const IS_PG = /^postgres(ql)?:\/\//i.test(DATABASE_URL);
+
+const SCHEMA =
+  process.env.DEPLOY_PRISMA_SCHEMA || (IS_PG ? SCHEMA_PG : SCHEMA_SQLITE);
+
+let db = null; // PrismaClient (se importa tras asegurar el cliente correcto)
 
 // ---- Permisología por rol (espejo de scripts/seed.ts) ----
 const ALL_PERMS = [
@@ -70,10 +87,21 @@ const DEMO_USERS = [
     } },
 ];
 
+// ==================== utilidades ====================
+
 function hashPassword(password) {
   const salt = randomBytes(16).toString("hex");
   const hash = scryptSync(password, salt, 64).toString("hex");
   return `${salt}:${hash}`;
+}
+
+function maskHost(url) {
+  try {
+    const u = new URL(url.replace(/^postgres(ql)?:\/\//i, "postgresql://"));
+    return `${u.hostname}${u.port ? ":" + u.port : ""}/${u.pathname.replace(/^\//, "")}`;
+  } catch {
+    return url.startsWith("file:") ? "SQLite local" : "(desconocido)";
+  }
 }
 
 function run(cmd, { allowFail = false } = {}) {
@@ -82,51 +110,127 @@ function run(cmd, { allowFail = false } = {}) {
     return true;
   } catch (e) {
     if (allowFail) {
-      console.warn(`⚠️  Omitido (falló sin bloquear el deploy): ${cmd.split("&&")[0].trim()}`);
-      if (e.stderr) console.warn(String(e.stderr).split("\n").slice(0, 6).join("\n"));
+      console.warn(`⚠️  Paso omitido (no bloquea el deploy): ${cmd.split("&&")[0].trim()}`);
+      const errText = String(e?.stderr || e?.message || "").split("\n").filter(Boolean).slice(0, 6).join("\n");
+      if (errText) console.warn(errText);
       return false;
     }
     throw e;
   }
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** Ejecuta fn reintentando ante errores transitorios de conexión (Neon cold start). */
+async function withRetry(fn, attempts = 3, delayMs = 2500) {
+  let lastErr;
+  for (let i = 1; i <= attempts; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      const transient =
+        ["P1001", "P1000", "P1002", "P1017", "P2024"].includes(e?.code) ||
+        /connect|timeout|timed out|ECONNREFUSED|ETIMEDOUT|terminated|cleared|socket/i.test(String(e?.message || ""));
+      if (!transient || i === attempts) throw e;
+      console.warn(`   ⏳ Conexión no lista (intento ${i}/${attempts}), reintentando en ${delayMs / 1000}s…`);
+      await sleep(delayMs);
+    }
+  }
+  throw lastErr;
+}
+
+// ==================== cliente Prisma correcto ====================
+
+function generatedProvider() {
+  const f = "node_modules/.prisma/client/schema.prisma";
+  if (!existsSync(f)) return null;
+  const m = readFileSync(f, "utf8").match(/provider\s*=\s*"(sqlite|postgresql)"/);
+  return m ? m[1] : null;
+}
+
+/** Asegura que el cliente generado coincida con DATABASE_URL (pg vs sqlite). */
+async function ensureClient() {
+  const target = IS_PG ? "postgresql" : "sqlite";
+  const current = generatedProvider();
+  if (current !== target) {
+    const schema = IS_PG ? SCHEMA_PG : SCHEMA_SQLITE;
+    console.log(`   Cliente Prisma desactualizado (${current || "ausente"} → ${target}). Regenerando…`);
+    run(`npx prisma generate --schema ${schema}`);
+  }
+  const { PrismaClient } = await import("@prisma/client");
+  db = new PrismaClient();
+}
+
+// ==================== PASO 1 · SCHEMA ====================
+
 async function tablesExist() {
   try {
-    await db.role.count();
+    await withRetry(() => db.role.count());
     return true;
   } catch (e) {
-    if (e?.code === "P2021") return false; // "table does not exist" en Prisma
+    if (e?.code === "P2021") return false; // tabla no existe
+    if (e?.code === "P2022") return true;  // columna falta → tabla existe, requiere sync
     throw e;
   }
 }
 
+/** Si falta DIRECT_URL, genera un schema sin directUrl para intentar el DDL por la pooled. */
+function prepareSchemaForPush() {
+  if (IS_PG && !DIRECT_URL && !process.env.DEPLOY_PRISMA_SCHEMA) {
+    const original = readFileSync(SCHEMA_PG, "utf8");
+    const stripped = original
+      .split("\n")
+      .filter((l) => !/directUrl/.test(l))
+      .join("\n");
+    writeFileSync(FALLBACK_SCHEMA_PATH, stripped);
+    console.warn("   ⚠️  DIRECT_URL no está definida: se intentará crear las tablas por la conexión pooled.");
+    console.warn("      Recomendado: agrega DIRECT_URL (cadena directa de Neon) en Vercel → Environment Variables.");
+    return FALLBACK_SCHEMA_PATH;
+  }
+  return SCHEMA;
+}
+
 async function stepSchema() {
   const exists = await tablesExist();
+  const schemaForPush = prepareSchemaForPush();
   if (exists) {
-    console.log("▶ Tablas ya existen: sincronización de schema segura (sin pérdida de datos)…");
-    // Si el cambio de modelos exigiera borrar columnas, falla y se avisa (no bloquea)
-    run(`npx prisma db push --schema ${SCHEMA} --skip-generate`, { allowFail: true });
+    console.log("   Tablas ya existen: sincronización segura (sin pérdida de datos)…");
+    run(`npx prisma db push --schema ${schemaForPush} --skip-generate`, { allowFail: true });
+    console.log("   ✅ Schema verificado/sincronizado.");
   } else {
-    console.log("▶ Base de datos vacía: creando tablas (prisma db push)…");
-    run(`npx prisma db push --schema ${SCHEMA} --skip-generate --accept-data-loss`);
+    console.log("   Base de datos vacía: creando tablas (prisma db push)…");
+    try {
+      run(`npx prisma db push --schema ${schemaForPush} --skip-generate --accept-data-loss`);
+      console.log("   ✅ Tablas creadas correctamente.");
+    } catch (e) {
+      const errText = String(e?.stderr || e?.message || "").split("\n").filter(Boolean).slice(-8).join("\n");
+      throw new Error(
+        `No se pudieron crear las tablas en ${maskHost(DATABASE_URL)}.\n` +
+        `   Revisa que DATABASE_URL y DIRECT_URL (cadena directa de Neon) estén bien configuradas.\n` +
+        `${errText}`
+      );
+    }
   }
 }
 
-async function baseDataExists() {
-  return (await db.role.count()) > 0;
-}
+// ==================== PASO 2 · DATOS BASE ====================
 
 async function stepSeed() {
-  if (await baseDataExists()) {
-    console.log("▶ Datos base ya presentes: NO se vuelven a cargar (seed omitido).");
+  const roleCount = await db.role.count();
+  if (roleCount > 0) {
+    console.log(`   Datos base ya presentes (${roleCount} roles): NO se vuelven a cargar. Seed omitido.`);
     return;
   }
-  console.log("▶ Base sin datos: cargando datos base (seed completo)…");
-  run("npx tsx scripts/seed.ts");
+  console.log("   Base sin datos: cargando datos base (seed completo)…");
+  const ok = run("npx tsx scripts/seed.ts", { allowFail: true });
+  if (!ok) console.warn("   ⚠️  El seed no pudo ejecutarse; la app funcionará pero sin datos demo de catálogo.");
 }
 
+// ==================== PASO 3 · USUARIOS DEMO ====================
+
 async function stepDemoUsers() {
-  console.log("▶ Garantizando 1 usuario demo por rol (solo crea los que falten)…");
+  console.log("   Garantizando 1 usuario demo por rol (solo crea los que falten)…");
   for (const def of ROLE_DEFS) {
     // Rol: solo se crea si falta. Si existe, se respeta tal cual (no se toca).
     let role = await db.role.findUnique({ where: { name: def.name } });
@@ -134,7 +238,7 @@ async function stepDemoUsers() {
       role = await db.role.create({
         data: { name: def.name, description: def.description, permissions: JSON.stringify(def.permissions) },
       });
-      console.log(`   + Rol ${def.name} creado`);
+      console.log(`   + Rol ${def.name} creado (con sus ${def.permissions.length} permisos)`);
     }
 
     const u = DEMO_USERS.find((x) => x.role === def.name);
@@ -161,29 +265,75 @@ async function stepDemoUsers() {
   }
 }
 
+// ==================== flujo principal ====================
+
+function hardFail(message) {
+  console.error("\n──────────────────────────────────────────────────────");
+  console.error("❌ deploy-init: ERROR CRÍTICO — el build se detiene.");
+  console.error(message);
+  console.error("──────────────────────────────────────────────────────");
+  console.error("(Para omitir la inicialización y desplegar igual: SKIP_DEPLOY_INIT=1)");
+  process.exit(1);
+}
+
 async function main() {
   if (process.env.SKIP_DEPLOY_INIT === "1") {
     console.log("deploy-init: omitido (SKIP_DEPLOY_INIT=1)");
     return;
   }
-  console.log("════════ deploy-init: inicialización de la base de datos ════════");
+  console.log("════════ deploy-init ▸ inicialización automática de la base de datos ════════");
+  console.log(`   Destino: ${maskHost(DATABASE_URL || "(sin DATABASE_URL)")} · ${IS_PG ? "PostgreSQL/Neon" : "SQLite"}`);
+
+  // ---- Preflight: variables de conexión ----
+  if (!DATABASE_URL) {
+    hardFail("DATABASE_URL no está definida.\n   Agrégala en Vercel → Settings → Environment Variables (cadena pooled de Neon).");
+  }
+
+  // ---- Crítico: conexión y creación de tablas (detienen el build) ----
   try {
+    await ensureClient();
+    await withRetry(() => db.$connect(), 4, 3000);
+  } catch (e) {
+    hardFail(
+      `No se pudo conectar a la base de datos (${maskHost(DATABASE_URL)}).\n` +
+      `   Error: ${String(e?.message || e).split("\n")[0]}\n` +
+      `   Revisa DATABASE_URL (cadena pooled de Neon) en Vercel → Environment Variables.`
+    );
+  }
+
+  try {
+    console.log("▶ PASO 1/3 · SCHEMA (tablas)");
     await stepSchema();
+  } catch (e) {
+    hardFail(String(e?.message || e));
+  }
+
+  // ---- No crítico: datos (solo advierten, el deploy continúa) ----
+  try {
+    console.log("▶ PASO 2/3 · DATOS BASE (seed idempotente)");
     await stepSeed();
+  } catch (e) {
+    console.warn("⚠️  Seed omitido por error (no bloquea el deploy):", String(e?.message || e).split("\n")[0]);
+  }
+
+  try {
+    console.log("▶ PASO 3/3 · USUARIOS DEMO (uno por rol)");
     await stepDemoUsers();
+  } catch (e) {
+    console.warn("⚠️  Usuarios demo incompletos por error (no bloquea el deploy):", String(e?.message || e).split("\n")[0]);
+  }
+
+  try {
     const [roles, users, customers, products] = await Promise.all([
       db.role.count(), db.user.count(), db.customer.count(), db.product.count(),
     ]);
     console.log(`════════ deploy-init OK → roles:${roles} usuarios:${users} clientes:${customers} productos:${products} ════════`);
     console.log("   Cuentas demo (contraseña: demo1234):");
     for (const u of DEMO_USERS) console.log(`     ${u.email.padEnd(28)} → ${u.role}`);
-  } catch (e) {
-    console.warn("⚠️  deploy-init no pudo completarse (el deploy continúa):");
-    console.warn(String(e?.message || e).split("\n").slice(0, 10).join("\n"));
-    console.warn("   Verifique DATABASE_URL/DIRECT_URL y ejecute `npm run deploy:init` manualmente.");
-  } finally {
-    await db.$disconnect();
+  } catch {
+    /* conteo final informativo: no bloquea */
   }
+  if (db) await db.$disconnect().catch(() => {});
 }
 
 main();

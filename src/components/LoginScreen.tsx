@@ -200,11 +200,13 @@ export function LoginScreen({ onLogin }: { onLogin: () => void }) {
                 <TabsContent value="login">
                   <form onSubmit={handleLogin} className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="email">Correo electrónico</Label>
+                      <Label htmlFor="email">Correo o usuario</Label>
                       <Input
                         id="email"
-                        type="email"
-                        placeholder="usuario@aqua.com"
+                        type="text"
+                        inputMode="email"
+                        autoComplete="username"
+                        placeholder="admin o admin@aqua.com"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         required

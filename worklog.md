@@ -81,3 +81,19 @@ Stage Summary:
 - El acceso rápido ya no muestra cuentas demo: aprende por frecuencia de uso en cada navegador (N configurable en Configuración → Seguridad) y cada tarjeta se puede eliminar
 - Nueva sección Configuración con tarjetas; Usuarios y Roles son vistas separadas; nombre/logo/moneda/datos de empresa/duración de sesión configurables y aplicados en toda la app (web, app chofer, portal cliente, PDF)
 - Valores restaurados a defaults tras las pruebas (AquaGestión, $, N=1, sesión 12h, sin logo)
+
+---
+Task ID: 4
+Agent: Super Z (main agent)
+Task: Diagnóstico de "no puedo iniciar sesión con admin"
+
+Work Log:
+- Diagnóstico: servidor activo (HTTP 200), API de login OK vía curl, BD con usuarios activos y settings sanos; reproducción en navegador limpio ingresó sin problemas
+- Causa hallada en dev.log: 4 intentos POST /api/auth/login con respuesta 401 → credenciales incorrectas del usuario (probablemente escribía solo "admin" o una clave distinta; el campo type=email bloqueaba el envío si no era un correo válido)
+- Solución: login acepta ahora correo completo O nombre de usuario (fallback input@aqua.com para inputs sin "@"); mensaje de error más claro "Usuario o contraseña incorrectos"
+- LoginScreen: campo "Correo o usuario" (type=text + inputMode=email + autocomplete=username) con placeholder "admin o admin@aqua.com"
+- Verificado: login con "admin"+admin123 OK (API y navegador), correo completo OK, clave incorrecta → 401; cero errores de consola
+- Se preserva la personalización del usuario (systemName "Agua Fresquita" que él mismo configuró)
+
+Stage Summary:
+- El login admite "admin" o "admin@aqua.com" con clave admin123; las credenciales de todas las cuentas siguen intactas

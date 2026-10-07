@@ -11,23 +11,34 @@ import {
 } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 
+function findUser(email: string) {
+  return db.user.findUnique({ where: { email }, include: { role: true } });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const email = String(body.email || "").trim().toLowerCase();
+    const input = String(body.email || "").trim().toLowerCase();
     const password = String(body.password || "");
 
-    if (!email || !password) {
-      throw new ApiError("Correo y contraseña son obligatorios", 400);
+    if (!input || !password) {
+      throw new ApiError("Usuario y contraseña son obligatorios", 400);
     }
 
-    const user = await db.user.findUnique({
-      where: { email },
-      include: { role: true },
-    });
+    // Acepta correo completo o solo el nombre de usuario (ej. "admin" → admin@aqua.com)
+    const candidates = [input];
+    if (!input.includes("@")) {
+      candidates.push(`${input}@aqua.com`);
+    }
+
+    let user: Awaited<ReturnType<typeof findUser>> = null;
+    for (const email of candidates) {
+      user = await findUser(email);
+      if (user) break;
+    }
 
     if (!user || !verifyPassword(password, user.passwordHash)) {
-      throw new ApiError("Credenciales inválidas", 401);
+      throw new ApiError("Usuario o contraseña incorrectos", 401);
     }
     if (!user.active) {
       throw new ApiError("Usuario inactivo. Contacte al administrador", 403);

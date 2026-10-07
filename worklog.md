@@ -116,3 +116,22 @@ Stage Summary:
 - Causa raíz: Toaster equivocado montado (shadcn en vez de sonner) → toasts nunca visibles.
 - El login nunca estuvo roto en el backend; el usuario no veía el feedback.
 - Archivos: src/app/layout.tsx, src/components/LoginScreen.tsx. 3 errores TS preexistentes en otros archivos (stops/proof, tracking, ClientPortal) no bloquean dev mode.
+
+---
+Task ID: 5
+Agent: main (Super Z)
+Task: Unificar la vista del portal de clientes al mismo layout web del panel administrativo
+
+Work Log:
+- Diagnóstico: ClientPortal estaba diseñado estilo app móvil (max-w-md, header teal, bottom-nav) a diferencia de AdminPanel (header blanco + sidebar + contenido amplio + footer).
+- Reescrito ClientPortal.tsx: header blanco sticky idéntico (logo+systemName+"Portal de Clientes", nombre+email usuario, NotificationBell, Avatar iniciales, logout), sidebar w-64 con nav (Catálogo / Mis Pedidos + badge de pedidos activos), caja CLIENTE al pie del sidebar, contenido en grillas responsivas (catálogo md:2 xl:3 cols; pedidos lg:2 cols), botón flotante carrito bottom-right, mismo footer que admin, menú hamburguesa móvil igual que admin.
+- Conservada toda la funcionalidad: carrito, confirmar pedido, nota para chofer, ver comprobante fotográfico, notificaciones.
+- page.tsx: pasa email al portal cliente; AppState ampliado con email?: string.
+- Fix TS preexistente: interfaz Product del portal añade active: boolean.
+- Verificación e2e (agent-browser, cliente@aqua.com): login OK, layout idéntico al admin (screenshot cliente-nuevo-layout.png), agregar al carrito OK, botón flotante "Ver mi pedido $2.50" (cliente-carrito.png), pedido #51 enviado con toast éxito, auto-navegación a Mis Pedidos con badge 5 y grilla 2 cols (cliente-pedidos.png). Sin errores de consola.
+- Nota: agent-browser click por @ref a veces no dispara el onClick de React (peculiaridad del CLI); verificado con click() JS que la app funciona correctamente.
+- Limpieza: logout + localStorage.clear().
+
+Stage Summary:
+- La vista cliente ahora usa exactamente el mismo layout web que admin/supervisor: header blanco + sidebar + contenido amplio + footer.
+- Archivos: src/components/client/ClientPortal.tsx (reescrito), src/app/page.tsx (email). DriverApp (chofer) sigue estilo móvil a propósito (es una app de campo).

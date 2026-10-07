@@ -14,7 +14,7 @@ type AppState =
   | { status: "login" }
   | { status: "admin"; user: SessionUser }
   | { status: "driver"; user: { id: number; name: string } }
-  | { status: "client"; user: { id: number; name: string } };
+  | { status: "client"; user: { id: number; name: string; email?: string } };
 
 export default function Home() {
   return (
@@ -35,7 +35,7 @@ function HomeInner() {
         if (user.roleName === "CHOFER") {
           setState({ status: "driver", user: { id: user.id, name: user.name } });
         } else if (user.roleName === "CLIENTE") {
-          setState({ status: "client", user: { id: user.id, name: user.name } });
+          setState({ status: "client", user: { id: user.id, name: user.name, email: user.email } });
         } else {
           setState({ status: "admin", user });
         }

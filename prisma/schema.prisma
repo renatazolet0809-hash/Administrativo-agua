@@ -1,0 +1,197 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:../db/custom.db"
+}
+
+// ============ SEGURIDAD / RBAC ============
+
+model Role {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique // ADMIN, SUPERVISOR, BODEGA, CHOFER
+  description String?
+  permissions String   @default("[]") // JSON array de permisos
+  users       User[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  name         String
+  email        String   @unique
+  passwordHash String
+  phone        String?
+  roleId       Int
+  role         Role     @relation(fields: [roleId], references: [id])
+  active       Boolean  @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  assignedRoutes    DeliveryRoute[]
+  createdOrders     Order[]
+  trackingPoints    TrackingPoint[]
+  dispatches        Dispatch[]
+  inventoryMovements InventoryMovement[]
+}
+
+// ============ CATÁLOGO E INVENTARIO ============
+
+model Product {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique
+  name      String
+  sizeLiters Float   // 5, 10, 20
+  price     Float
+  cost      Float    @default(0)
+  stock     Int      @default(0) // unidades de botellones llenos
+  minStock  Int      @default(10)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orderItems  OrderItem[]
+  movements   InventoryMovement[]
+  dispatches  Dispatch[]
+}
+
+model InventoryMovement {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id])
+  type      String   // ENTRADA | SALIDA | AJUSTE
+  quantity  Int
+  reason    String?
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+// ============ CLIENTES ============
+
+model Customer {
+  id        Int      @id @default(autoincrement())
+  name      String
+  phone     String
+  email     String?
+  address   String
+  zone      String   // sector / zona
+  lat       Float
+  lng       Float
+  notes     String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders Order[]
+  routeStops RouteStop[]
+}
+
+// ============ PEDIDOS ============
+
+model Order {
+  id         Int      @id @default(autoincrement())
+  customerId Int
+  customer   Customer @relation(fields: [customerId], references: [id])
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id])
+  status     String   @default("PENDIENTE") // PENDIENTE | CONFIRMADO | EN_RUTA | ENTREGADO | CANCELADO
+  total      Float    @default(0)
+  notes      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  items      OrderItem[]
+  routeStops RouteStop[]
+}
+
+model OrderItem {
+  id        Int     @id @default(autoincrement())
+  orderId   Int
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId Int
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Int
+  unitPrice Float
+}
+
+// ============ DESPACHO Y RUTAS ============
+
+model Vehicle {
+  id       Int    @id @default(autoincrement())
+  plate    String @unique
+  model    String
+  capacityLiters Float @default(1000)
+  active   Boolean @default(true)
+  routes   DeliveryRoute[]
+}
+
+model DeliveryRoute {
+  id        Int       @id @default(autoincrement())
+  name      String
+  driverId  Int
+  driver    User      @relation(fields: [driverId], references: [id])
+  vehicleId Int?
+  vehicle   Vehicle?  @relation(fields: [vehicleId], references: [id])
+  date      DateTime
+  status    String    @default("PLANIFICADA") // PLANIFICADA | EN_CURSO | COMPLETADA | CANCELADA
+  startedAt DateTime?
+  completedAt DateTime?
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  stops   RouteStop[]
+  trackingPoints TrackingPoint[]
+  dispatches Dispatch[]
+}
+
+model RouteStop {
+  id       Int     @id @default(autoincrement())
+  routeId  Int
+  route    DeliveryRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  orderId  Int?
+  order    Order?  @relation(fields: [orderId], references: [id])
+  customerId Int
+  customer Customer @relation(fields: [customerId], references: [id])
+  sequence Int
+  status   String  @default("PENDIENTE") // PENDIENTE | EN_CAMINO | ENTREGADO | NO_ENTREGADO
+  itemsSummary String @default("")
+  deliveredAt DateTime?
+  notes    String?
+}
+
+model Dispatch {
+  id        Int      @id @default(autoincrement())
+  routeId   Int
+  route     DeliveryRoute @relation(fields: [routeId], references: [id])
+  productId Int
+  product   Product  @relation(fields: [productId], references: [id])
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  quantity  Int
+  status    String   @default("CARGADO") // CARGADO | RETORNADO
+  createdAt DateTime @default(now())
+}
+
+// ============ TRACKING GPS ============
+
+model TrackingPoint {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  routeId   Int?
+  route     DeliveryRoute? @relation(fields: [routeId], references: [id])
+  lat       Float
+  lng       Float
+  speed     Float    @default(0)
+  accuracy  Float    @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([routeId, createdAt])
+}

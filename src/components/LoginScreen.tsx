@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Droplets, MapPin, ShieldCheck, UserPlus, Loader2, X,
-  KeyRound, MousePointerClick, History,
+  KeyRound, MousePointerClick, History, AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,6 +46,7 @@ export function LoginScreen({ onLogin }: { onLogin: () => void }) {
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
   const [reg, setReg] = useState(EMPTY_REG);
   const [registering, setRegistering] = useState(false);
 
@@ -66,6 +67,7 @@ export function LoginScreen({ onLogin }: { onLogin: () => void }) {
     const usedPass = dPass || password;
     const usedRemember = opts?.remember ?? remember;
     setLoading(true);
+    setLoginError(null);
     try {
       const res = await api<LoginResponse>("/api/auth/login", {
         method: "POST",
@@ -83,7 +85,14 @@ export function LoginScreen({ onLogin }: { onLogin: () => void }) {
       toast.success(`Bienvenido, ${res.user.name}`);
       onLogin();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Error al iniciar sesión");
+      const raw = err instanceof Error ? err.message : "Error al iniciar sesión";
+      // Mensajes claros y visibles: toast + alerta inline dentro del formulario
+      const msg =
+        raw === "Error en la solicitud"
+          ? "No se pudo conectar con el servidor. Verifique su conexión e intente nuevamente."
+          : raw;
+      setLoginError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -208,7 +217,7 @@ export function LoginScreen({ onLogin }: { onLogin: () => void }) {
                         autoComplete="username"
                         placeholder="admin o admin@aqua.com"
                         value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        onChange={(e) => { setEmail(e.target.value); setLoginError(null); }}
                         required
                       />
                     </div>
@@ -220,7 +229,7 @@ export function LoginScreen({ onLogin }: { onLogin: () => void }) {
                         type="password"
                         placeholder="••••••••"
                         value={password}
-                        onChange={(e) => setPassword(e.target.value)}
+                        onChange={(e) => { setPassword(e.target.value); setLoginError(null); }}
                         required
                       />
                     </div>
@@ -234,9 +243,21 @@ export function LoginScreen({ onLogin }: { onLogin: () => void }) {
                         Recordar la cuenta en este dispositivo (acceso rápido con ingreso directo)
                       </Label>
                     </div>
+                    {loginError && (
+                      <div
+                        role="alert"
+                        className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-800"
+                      >
+                        <AlertCircle className="h-4 w-4 mt-0.5 shrink-0 text-red-600" />
+                        <span>{loginError}</span>
+                      </div>
+                    )}
                     <Button type="submit" className="w-full" disabled={loading}>
                       {loading ? "Verificando..." : "Ingresar"}
                     </Button>
+                    <p className="text-[11px] text-muted-foreground text-center">
+                      Puede usar su correo completo o solo el usuario (ej. <span className="font-mono">admin</span>).
+                    </p>
                   </form>
                 </TabsContent>
 

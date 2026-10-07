@@ -97,3 +97,22 @@ Work Log:
 
 Stage Summary:
 - El login admite "admin" o "admin@aqua.com" con clave admin123; las credenciales de todas las cuentas siguen intactas
+
+---
+Task ID: 4
+Agent: main (Super Z)
+Task: Fix login silent failure — no error alert shown on wrong credentials ("no vi ninguna alerta de problema en las credenciales")
+
+Work Log:
+- Diagnóstico: layout.tsx montaba el <Toaster /> de shadcn/Radix (@/components/ui/toaster), pero TODA la app usa toast de sonner. El Toaster de sonner nunca estaba montado → ni errores ni éxitos se mostraban (toasts invisibles en toda la app).
+- Confirmado además que la API de login funciona bien: acepta usuario corto ("admin" → admin@aqua.com) y devuelve mensajes claros ("Usuario o contraseña incorrectos").
+- Fix 1: layout.tsx ahora importa { Toaster } from "@/components/ui/sonner" y lo monta con richColors closeButton position="top-center".
+- Fix 2: LoginScreen.tsx — alerta inline roja (role=alert, border-red-200 bg-red-50) dentro del formulario entre el checkbox y el botón; se limpia al escribir; mapeo de error genérico a "No se pudo conectar con el servidor…"; hint "Puede usar su correo completo o solo el usuario (ej. admin)".
+- Verificación e2e (agent-browser): contraseña incorrecta → toast "Usuario o contraseña incorrectos" + alerta inline visible (screenshot download/login-error-visible.png); admin/admin123 → entra al panel con toast "Bienvenido, Administrador General". Sin errores de consolta nuevos.
+- Nota: usuario cambió systemName a "Agua Fresquita" (config de personalización funcionando en su navegador).
+- Limpieza: logout + localStorage.clear() al finalizar.
+
+Stage Summary:
+- Causa raíz: Toaster equivocado montado (shadcn en vez de sonner) → toasts nunca visibles.
+- El login nunca estuvo roto en el backend; el usuario no veía el feedback.
+- Archivos: src/app/layout.tsx, src/components/LoginScreen.tsx. 3 errores TS preexistentes en otros archivos (stops/proof, tracking, ClientPortal) no bloquean dev mode.

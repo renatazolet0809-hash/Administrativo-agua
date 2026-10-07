@@ -18,6 +18,7 @@ export const PERMISSIONS = {
   USERS_MANAGE: "users.manage",
   ROLES_MANAGE: "roles.manage",
   REPORTS_VIEW: "reports.view",
+  SETTINGS_MANAGE: "settings.manage",
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -42,6 +43,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "users.manage": "Gestionar usuarios",
   "roles.manage": "Gestionar roles y permisos",
   "reports.view": "Ver reportes",
+  "settings.manage": "Gestionar configuración del sistema",
 };
 
 export const ROLE_PRESETS: Record<string, Permission[]> = {

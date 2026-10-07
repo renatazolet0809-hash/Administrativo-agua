@@ -15,7 +15,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { api, money, fmtDay, STATUS_LABELS, STATUS_COLORS } from "@/components/shared/api";
+import { api, money, getCurrencySymbol, fmtDay, STATUS_LABELS, STATUS_COLORS } from "@/components/shared/api";
+import { useSystemConfig } from "@/components/shared/system-config";
 import { toast } from "sonner";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -46,6 +47,7 @@ function isoDay(d: Date): string {
 }
 
 export function Reports({ canView }: { canView: boolean }) {
+  const { systemName, config } = useSystemConfig();
   const [preset, setPreset] = useState<string>("7d");
   const [from, setFrom] = useState(isoDay(new Date(Date.now() - 6 * 24 * 3600 * 1000)));
   const [to, setTo] = useState(isoDay(new Date()));
@@ -90,13 +92,16 @@ export function Reports({ canView }: { canView: boolean }) {
     if (!data) return;
     const doc = new jsPDF();
     const width = doc.internal.pageSize.getWidth();
+    const companyLine = [
+      config.companyName, config.companyRif, config.companyPhone,
+    ].filter(Boolean).join(" · ");
 
     // Encabezado
     doc.setFillColor(15, 118, 110);
     doc.rect(0, 0, width, 30, "F");
     doc.setTextColor(255);
     doc.setFontSize(18);
-    doc.text("AquaGestión — Reporte de Ventas", 14, 13);
+    doc.text(`${systemName} — Reporte de Ventas`, 14, 13);
     doc.setFontSize(10);
     doc.text(`Período: ${fmtDay(data.period.from)} — ${fmtDay(data.period.to)}`, 14, 20);
     doc.text(`Generado: ${new Date().toLocaleString("es-VE")}`, 14, 26);
@@ -162,7 +167,7 @@ export function Reports({ canView }: { canView: boolean }) {
       head: [["#", "Fecha", "Cliente", "Productos", "Total", "Estado"]],
       body: data.orders.slice(0, 40).map((o) => [
         String(o.id), fmtDay(o.date), o.customer, o.items,
-        `$${o.total.toFixed(2)}`, STATUS_LABELS[o.status] || o.status,
+        getCurrencySymbol() + o.total.toFixed(2), STATUS_LABELS[o.status] || o.status,
       ]),
       theme: "grid",
       headStyles: { fillColor: [15, 118, 110] },
@@ -171,7 +176,7 @@ export function Reports({ canView }: { canView: boolean }) {
         doc.setFontSize(8);
         doc.setTextColor(120);
         doc.text(
-          "AquaGestión · Sistema de control y despacho de agua embotellada",
+          companyLine || `${systemName} · Sistema de control y despacho de agua embotellada`,
           14, doc.internal.pageSize.getHeight() - 8
         );
       },

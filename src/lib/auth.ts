@@ -35,8 +35,8 @@ function b64url(input: Buffer | string): string {
   return Buffer.from(input).toString("base64url");
 }
 
-export function signToken(userId: number): string {
-  const payload: TokenPayload = { userId, exp: Date.now() + TOKEN_TTL_MS };
+export function signToken(userId: number, ttlMs: number = TOKEN_TTL_MS): string {
+  const payload: TokenPayload = { userId, exp: Date.now() + ttlMs };
   const body = b64url(JSON.stringify(payload));
   const sig = createHmac("sha256", SECRET).update(body).digest("base64url");
   return `${body}.${sig}`;

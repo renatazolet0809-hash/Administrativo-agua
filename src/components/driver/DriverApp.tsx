@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { api, clearToken, fmtDate, STATUS_LABELS, STATUS_COLORS, haversine } from "@/components/shared/api";
 import { NotificationBell } from "@/components/shared/NotificationBell";
+import { useSystemConfig } from "@/components/shared/system-config";
 import dynamic from "next/dynamic";
 import { toast } from "sonner";
 
@@ -62,6 +63,7 @@ function compressImage(file: File, maxSize = 1024, quality = 0.62): Promise<stri
 }
 
 export function DriverApp({ user, onLogout }: { user: { id: number; name: string }; onLogout: () => void }) {
+  const { systemName, logo } = useSystemConfig();
   const [routes, setRoutes] = useState<DriverRoute[]>([]);
   const [activeRouteId, setActiveRouteId] = useState<number | null>(null);
   const [myPos, setMyPos] = useState<[number, number] | null>(null);
@@ -511,11 +513,11 @@ export function DriverApp({ user, onLogout }: { user: { id: number; name: string
     <div className="min-h-screen bg-teal-50/50 flex flex-col">
       <header className="sticky top-0 z-40 bg-gradient-to-r from-teal-700 to-cyan-800 text-white px-4 py-4 shadow-lg">
         <div className="max-w-md mx-auto flex items-center gap-3">
-          <div className="p-2 bg-white/15 rounded-xl backdrop-blur">
-            <Droplets className="h-6 w-6" />
-          </div>
+          {logo
+            ? <div className="bg-white/90 rounded-xl p-1.5"><img src={logo} alt={systemName} className="h-6 w-6 object-contain" /></div>
+            : <div className="p-2 bg-white/15 rounded-xl backdrop-blur"><Droplets className="h-6 w-6" /></div>}
           <div className="flex-1">
-            <h1 className="font-bold">AquaGestión · Chofer</h1>
+            <h1 className="font-bold">{systemName} · Chofer</h1>
             <p className="text-xs text-teal-100">{user.name}</p>
           </div>
           <NotificationBell dark onOpenRoute={openRouteFromNotif} />

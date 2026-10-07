@@ -13,7 +13,7 @@ const ALL_PERMS = [
   "dashboard.view", "products.view", "products.manage", "inventory.manage",
   "customers.view", "customers.manage", "orders.view", "orders.manage",
   "routes.view", "routes.manage", "tracking.view", "tracking.send",
-  "delivery.execute", "users.manage", "roles.manage", "reports.view",
+  "delivery.execute", "users.manage", "roles.manage", "reports.view", "settings.manage",
 ];
 
 const SUPERVISOR_PERMS = [
@@ -46,6 +46,7 @@ async function main() {
   await db.product.deleteMany();
   await db.vehicle.deleteMany();
   await db.role.deleteMany();
+  await db.setting.deleteMany();
 
   console.log("Creando roles...");
   const adminRole = await db.role.create({
@@ -349,6 +350,23 @@ async function main() {
   console.log("Movimientos de inventario iniciales...");
   await db.inventoryMovement.create({ data: { productId: p5.id, type: "ENTRADA", quantity: 120, reason: "Compra inicial", userId: adminUser.id } });
   await db.inventoryMovement.create({ data: { productId: p20.id, type: "ENTRADA", quantity: 200, reason: "Compra inicial", userId: adminUser.id } });
+
+  console.log("Configuraciones por defecto del sistema...");
+  const DEFAULT_SETTINGS: Record<string, string> = {
+    systemName: "AquaGestión",
+    logo: "",
+    currency: "$",
+    quickAccessThreshold: "1",
+    sessionHours: "12",
+    companyName: "",
+    companyRif: "",
+    companyPhone: "",
+    companyEmail: "",
+    companyAddress: "",
+  };
+  for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
+    await db.setting.upsert({ where: { key }, update: { value }, create: { key, value } });
+  }
 
   console.log("Seed completado ✓");
   console.log(`

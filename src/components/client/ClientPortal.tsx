@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { api, clearToken, money, fmtDay, STATUS_LABELS, STATUS_COLORS } from "@/components/shared/api";
 import { NotificationBell } from "@/components/shared/NotificationBell";
+import { useSystemConfig } from "@/components/shared/system-config";
 import { toast } from "sonner";
 
 interface Product {
@@ -37,6 +38,7 @@ export function ClientPortal({
   user: { id: number; name: string };
   onLogout: () => void;
 }) {
+  const { systemName, logo } = useSystemConfig();
   const [tab, setTab] = useState<"catalogo" | "pedidos">("catalogo");
   const [products, setProducts] = useState<Product[]>([]);
   const [cart, setCart] = useState<Record<number, number>>({});
@@ -137,12 +139,14 @@ export function ClientPortal({
       {/* Header */}
       <header className="sticky top-0 z-40 bg-gradient-to-r from-teal-700 to-cyan-800 text-white shadow-lg">
         <div className="max-w-md mx-auto px-4 py-4 flex items-center gap-3">
-          <div className="p-2 bg-white/15 rounded-xl backdrop-blur">
-            <Droplets className="h-6 w-6" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h1 className="font-bold">AquaGestión · Clientes</h1>
-            <p className="text-xs text-teal-100 truncate">Hola, {user.name} 👋</p>
+          <div className="flex items-center gap-3">
+            {logo
+              ? <div className="bg-white/90 rounded-xl p-1.5"><img src={logo} alt={systemName} className="h-6 w-6 object-contain" /></div>
+              : <div className="p-2 bg-white/15 rounded-xl backdrop-blur"><Droplets className="h-6 w-6" /></div>}
+            <div className="flex-1 min-w-0">
+              <h1 className="font-bold">{systemName} · Clientes</h1>
+              <p className="text-xs text-teal-100 truncate">Hola, {user.name} 👋</p>
+            </div>
           </div>
           <NotificationBell dark />
           <Button size="icon" variant="ghost" className="text-white hover:bg-teal-600" onClick={logout} title="Salir">

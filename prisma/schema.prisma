@@ -234,3 +234,11 @@ model TrackingPoint {
   @@index([userId, createdAt])
   @@index([routeId, createdAt])
 }
+
+// ============ CONFIGURACIÓN DEL SISTEMA ============
+
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}

@@ -7,6 +7,7 @@ import { AdminPanel, type SessionUser } from "@/components/admin/AdminPanel";
 import { DriverApp } from "@/components/driver/DriverApp";
 import { ClientPortal } from "@/components/client/ClientPortal";
 import { api, getToken } from "@/components/shared/api";
+import { SystemConfigProvider } from "@/components/shared/system-config";
 
 type AppState =
   | { status: "loading" }
@@ -16,6 +17,14 @@ type AppState =
   | { status: "client"; user: { id: number; name: string } };
 
 export default function Home() {
+  return (
+    <SystemConfigProvider>
+      <HomeInner />
+    </SystemConfigProvider>
+  );
+}
+
+function HomeInner() {
   const [state, setState] = useState<AppState>({ status: "loading" });
 
   const loadSession = useCallback(async () => {
@@ -50,7 +59,7 @@ export default function Home() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-teal-50/40">
         <Loader2 className="h-8 w-8 text-teal-600 animate-spin" />
-        <p className="text-sm text-muted-foreground mt-3">Cargando AquaGestión...</p>
+        <p className="text-sm text-muted-foreground mt-3">Cargando sistema…</p>
       </div>
     );
   }

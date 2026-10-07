@@ -56,3 +56,28 @@ Stage Summary:
 - Sistema completo con las 4 nuevas funcionalidades operativas en puerto 3000
 - Cuentas: admin@aqua.com/admin123 · supervisor@aqua.com/super123 · bodega@aqua.com/bodega123 · chofer@aqua.com/chofer123 · chofer2@aqua.com/chofer123 · cliente@aqua.com/cliente123
 - Flujo end-to-end demostrado: cliente pide en el portal → staff recibe push → confirma → arma ruta → chofer recibe push → entrega con foto+GPS → cliente ve comprobante
+
+---
+Task ID: 3
+Agent: Super Z (main agent)
+Task: Acceso rápido dinámico por frecuencia de uso + vista de Configuración con tarjetas (Usuarios y Roles separados, nombre/logo del sistema editable)
+
+Work Log:
+- Prisma: nuevo modelo Setting (key/value); db push sin pérdida de datos; script no destructivo scripts/apply-settings-update.ts (10 configuraciones por defecto + permiso settings.manage al rol ADMIN; seed.ts actualizado para futuros reseeds)
+- Nuevo permiso settings.manage en permissions.ts (ADMIN lo recibe automáticamente)
+- API /api/settings: GET público devuelve solo claves públicas (systemName, logo, currency, quickAccessThreshold); GET autenticado devuelve todo; PUT requiere settings.manage con validaciones (sessionHours 1-72, threshold 0-20, logo dataURL ≤400KB, trim de textos)
+- Sesión configurable: signToken(userId, ttl) + login lee sessionHours de la BD (token + cookie Max-Age sincronizados); verificado token de 12.0h exactas
+- src/lib/settings.ts: definiciones, defaults, validación y helpers server-side
+- Frontend compartido: SystemConfigProvider (contexto React, aplica moneda a money() global y document.title) + módulo quick-access.ts (localStorage por navegador: contador de ingresos, contraseña ofuscada base64 opcional, eliminar cuenta)
+- LoginScreen reescrito: sin lista demo fija; acceso rápido dinámico (cuentas con count > N, N configurable, orden por último uso), tarjetas con avatar/rol/indicador "directo" o "pide clave", botón X para eliminar, checkbox "Recordar la cuenta en este dispositivo" (default activado), click sin clave → rellena correo y enfoca contraseña
+- AdminPanel: menú con grupos Operación/Configuración; vista Configuración = 5 tarjetas (Personalización, Datos de la empresa, Seguridad y sesión, Usuarios, Roles y Permisos) filtradas por permisos; sub-vistas con botón volver
+- Users.tsx y Roles.tsx separados en vistas independientes (antes pestañas dentro de una sola)
+- Settings.tsx: formularios con guardado inmediato + refresh del contexto (header cambia en vivo); logo con redimensionado canvas 192px y vista previa
+- Marca dinámica en: header/footer Admin, LoginScreen (branding), App Chofer, Portal Cliente, PDF de Reportes (título + pie con razón social/RIF/teléfono) y moneda configurable en todos los precios vía money()
+- Reinicio de dev server (Prisma client regenerado); servidor lanzado con setsid para persistencia
+- Verificación end-to-end: API (GET público/privado, PUT admin OK, 403 supervisor, 400 validaciones), navegador: login→logout×2 → tarjeta aparece; umbral N=3 → tarjeta desaparece; restaurar N=1 → reaparece; X elimina (localStorage []); logo subido por canvas → header/footer/login actualizados; Usuarios y Roles independientes; cero errores de consola
+
+Stage Summary:
+- El acceso rápido ya no muestra cuentas demo: aprende por frecuencia de uso en cada navegador (N configurable en Configuración → Seguridad) y cada tarjeta se puede eliminar
+- Nueva sección Configuración con tarjetas; Usuarios y Roles son vistas separadas; nombre/logo/moneda/datos de empresa/duración de sesión configurables y aplicados en toda la app (web, app chofer, portal cliente, PDF)
+- Valores restaurados a defaults tras las pruebas (AquaGestión, $, N=1, sesión 12h, sin logo)

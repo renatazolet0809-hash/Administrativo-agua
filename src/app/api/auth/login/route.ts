@@ -9,6 +9,7 @@ import {
   verifyPassword,
   ApiError,
 } from "@/lib/auth";
+import { getSettings } from "@/lib/settings";
 
 export async function POST(request: NextRequest) {
   try {
@@ -37,7 +38,12 @@ export async function POST(request: NextRequest) {
       data: { lastLoginAt: new Date() },
     });
 
-    const token = signToken(user.id);
+    // Duración de la sesión configurable (Configuración → Seguridad), entre 1 y 72 horas
+    const settings = await getSettings();
+    const sessionHours = Math.min(72, Math.max(1, Number(settings.sessionHours) || 12));
+    const ttlMs = sessionHours * 60 * 60 * 1000;
+
+    const token = signToken(user.id, ttlMs);
     const response = ok({
       token,
       user: {
@@ -53,7 +59,7 @@ export async function POST(request: NextRequest) {
 
     response.headers.append(
       "Set-Cookie",
-      `${SESSION_COOKIE}=${token}; HttpOnly; Path=/; Max-Age=${60 * 60 * 12}; SameSite=Lax`
+      `${SESSION_COOKIE}=${token}; HttpOnly; Path=/; Max-Age=${sessionHours * 60 * 60}; SameSite=Lax`
     );
     return response;
   } catch (error) {

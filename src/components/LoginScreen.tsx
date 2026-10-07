@@ -1,16 +1,25 @@
 "use client";
 
-import { useState } from "react";
-import { Droplets, MapPin, Users, ShieldCheck, UserPlus, ShoppingBag, Loader2 } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import {
+  Droplets, MapPin, ShieldCheck, UserPlus, Loader2, X,
+  KeyRound, MousePointerClick, History,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { api, setToken } from "@/components/shared/api";
+import { useSystemConfig } from "@/components/shared/system-config";
+import {
+  recordLogin, getQuickAccounts, removeQuickAccount, decodePass, type QuickAccount,
+} from "@/components/shared/quick-access";
 import { toast } from "sonner";
 
 interface LoginResponse {
@@ -29,31 +38,48 @@ const ZONES = [
   "El Cafetal", "El Hatillo", "Caracas Centro",
 ];
 
-const DEMO_USERS = [
-  { email: "admin@aqua.com", password: "admin123", label: "Administrador", icon: ShieldCheck },
-  { email: "supervisor@aqua.com", password: "super123", label: "Supervisor", icon: Users },
-  { email: "chofer@aqua.com", password: "chofer123", label: "Chofer (App móvil)", icon: MapPin },
-  { email: "cliente@aqua.com", password: "cliente123", label: "Cliente (Portal web)", icon: ShoppingBag },
-];
-
 const EMPTY_REG = { name: "", email: "", password: "", phone: "", address: "", zone: "" };
 
 export function LoginScreen({ onLogin }: { onLogin: () => void }) {
-  const [email, setEmail] = useState("admin@aqua.com");
-  const [password, setPassword] = useState("admin123");
+  const { systemName, logo, config } = useSystemConfig();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(true);
   const [loading, setLoading] = useState(false);
   const [reg, setReg] = useState(EMPTY_REG);
   const [registering, setRegistering] = useState(false);
 
-  async function handleLogin(e?: React.FormEvent, dEmail?: string, dPass?: string) {
+  // Acceso rápido dinámico (por frecuencia de uso en este navegador)
+  const threshold = Number(config.quickAccessThreshold ?? "1");
+  const [quickAccounts, setQuickAccounts] = useState<QuickAccount[]>([]);
+  const passwordRef = useRef<HTMLInputElement>(null);
+
+  const refreshQuick = useCallback(() => {
+    setQuickAccounts(getQuickAccounts(Number.isFinite(threshold) ? threshold : 1));
+  }, [threshold]);
+
+  useEffect(() => { refreshQuick(); }, [refreshQuick]);
+
+  async function handleLogin(e?: React.FormEvent, dEmail?: string, dPass?: string, opts?: { remember?: boolean }) {
     e?.preventDefault();
+    const usedEmail = dEmail || email;
+    const usedPass = dPass || password;
+    const usedRemember = opts?.remember ?? remember;
     setLoading(true);
     try {
       const res = await api<LoginResponse>("/api/auth/login", {
         method: "POST",
-        body: { email: dEmail || email, password: dPass || password },
+        body: { email: usedEmail, password: usedPass },
       });
       setToken(res.token);
+      // Registra el ingreso para el acceso rápido de este navegador
+      recordLogin({
+        email: usedEmail,
+        name: res.user.name,
+        roleName: res.user.roleName,
+        password: usedPass,
+        remember: usedRemember,
+      });
       toast.success(`Bienvenido, ${res.user.name}`);
       onLogin();
     } catch (err) {
@@ -61,6 +87,26 @@ export function LoginScreen({ onLogin }: { onLogin: () => void }) {
     } finally {
       setLoading(false);
     }
+  }
+
+  function quickLogin(acc: QuickAccount) {
+    const pass = decodePass(acc);
+    if (pass) {
+      // Ingreso directo: la contraseña quedó recordada en este dispositivo
+      handleLogin(undefined, acc.email, pass, { remember: true });
+    } else {
+      // Completa el correo y pide la contraseña
+      setEmail(acc.email);
+      setPassword("");
+      toast.info(`Ingrese la contraseña de ${acc.email}`, { icon: <KeyRound className="h-4 w-4" /> });
+      setTimeout(() => passwordRef.current?.focus(), 50);
+    }
+  }
+
+  function removeFromQuick(acc: QuickAccount) {
+    removeQuickAccount(acc.email);
+    refreshQuick();
+    toast.success(`${acc.email} eliminada del acceso rápido`);
   }
 
   async function handleRegister(e: React.FormEvent) {
@@ -72,6 +118,10 @@ export function LoginScreen({ onLogin }: { onLogin: () => void }) {
         body: reg,
       });
       setToken(res.token);
+      recordLogin({
+        email: res.user.email, name: res.user.name, roleName: res.user.roleName,
+        password: reg.password, remember: true,
+      });
       toast.success(`¡Cuenta creada! Bienvenido al portal, ${res.user.name}`);
       onLogin();
     } catch (err) {
@@ -81,16 +131,20 @@ export function LoginScreen({ onLogin }: { onLogin: () => void }) {
     }
   }
 
+  const brandIcon = logo
+    ? <img src={logo} alt={systemName} className="h-9 w-9 object-contain" />
+    : <div className="p-3 bg-white/15 rounded-2xl backdrop-blur"><Droplets className="h-9 w-9" /></div>;
+
   return (
     <div className="min-h-screen flex flex-col lg:flex-row bg-gradient-to-br from-teal-50 via-background to-cyan-100">
       {/* Panel de marca */}
       <div className="hidden lg:flex lg:w-1/2 flex-col justify-between p-12 bg-gradient-to-br from-teal-600 to-cyan-800 text-white">
         <div className="flex items-center gap-3">
-          <div className="p-3 bg-white/15 rounded-2xl backdrop-blur">
-            <Droplets className="h-9 w-9" />
-          </div>
+          {logo
+            ? <div className="bg-white/90 rounded-2xl p-2"><img src={logo} alt={systemName} className="h-9 w-9 object-contain" /></div>
+            : <div className="p-3 bg-white/15 rounded-2xl backdrop-blur"><Droplets className="h-9 w-9" /></div>}
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">AquaGestión</h1>
+            <h1 className="text-2xl font-bold tracking-tight">{systemName}</h1>
             <p className="text-teal-100 text-sm">Control y Despacho de Agua Embotellada</p>
           </div>
         </div>
@@ -124,10 +178,10 @@ export function LoginScreen({ onLogin }: { onLogin: () => void }) {
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="w-full max-w-md space-y-6">
           <div className="lg:hidden flex items-center gap-3 justify-center pt-6">
-            <div className="p-2.5 bg-teal-600 text-white rounded-xl">
-              <Droplets className="h-7 w-7" />
-            </div>
-            <h1 className="text-2xl font-bold">AquaGestión</h1>
+            {logo
+              ? <img src={logo} alt={systemName} className="h-10 w-10 object-contain" />
+              : <div className="p-2.5 bg-teal-600 text-white rounded-xl"><Droplets className="h-7 w-7" /></div>}
+            <h1 className="text-2xl font-bold">{systemName}</h1>
           </div>
 
           <Card className="shadow-xl border-teal-100">
@@ -160,12 +214,23 @@ export function LoginScreen({ onLogin }: { onLogin: () => void }) {
                       <Label htmlFor="password">Contraseña</Label>
                       <Input
                         id="password"
+                        ref={passwordRef}
                         type="password"
                         placeholder="••••••••"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         required
                       />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="remember"
+                        checked={remember}
+                        onCheckedChange={(v) => setRemember(v === true)}
+                      />
+                      <Label htmlFor="remember" className="text-xs font-normal text-muted-foreground cursor-pointer">
+                        Recordar la cuenta en este dispositivo (acceso rápido con ingreso directo)
+                      </Label>
                     </div>
                     <Button type="submit" className="w-full" disabled={loading}>
                       {loading ? "Verificando..." : "Ingresar"}
@@ -225,28 +290,67 @@ export function LoginScreen({ onLogin }: { onLogin: () => void }) {
             </CardContent>
           </Card>
 
-          <Card className="border-dashed">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Acceso rápido de demostración
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-2">
-              {DEMO_USERS.map((u) => (
-                <Button
-                  key={u.email}
-                  variant="outline"
-                  className="justify-start gap-2 h-11"
-                  disabled={loading}
-                  onClick={() => handleLogin(undefined, u.email, u.password)}
-                >
-                  <u.icon className="h-4 w-4 text-teal-600" />
-                  <span className="flex-1 text-left">{u.label}</span>
-                  <span className="text-xs text-muted-foreground">{u.email}</span>
-                </Button>
-              ))}
-            </CardContent>
-          </Card>
+          {/* ---- ACCESO RÁPIDO DINÁMICO ---- */}
+          {quickAccounts.length > 0 && (
+            <Card className="border-dashed">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+                  <History className="h-4 w-4" /> Acceso rápido
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Cuentas con más de {threshold} ingreso{threshold === 1 ? "" : "s"} desde este navegador.
+                  Las que tienen <KeyRound className="h-3 w-3 inline -mt-0.5" /> entran directamente.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-2">
+                {quickAccounts.map((acc) => {
+                  const hasPass = !!acc.pass;
+                  return (
+                    <div
+                      key={acc.email}
+                      className="group flex items-center gap-2 rounded-lg border bg-white hover:border-teal-300 hover:shadow-sm transition"
+                    >
+                      <button
+                        type="button"
+                        className="flex-1 flex items-center gap-2.5 px-3 py-2.5 text-left rounded-lg disabled:opacity-60"
+                        disabled={loading}
+                        onClick={() => quickLogin(acc)}
+                        title={hasPass ? "Ingresar directamente" : "Completar correo y pedir contraseña"}
+                      >
+                        <div className="h-8 w-8 shrink-0 rounded-full bg-teal-100 text-teal-800 text-[11px] font-bold flex items-center justify-center">
+                          {acc.name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase()}
+                        </div>
+                        <span className="flex-1 min-w-0">
+                          <span className="flex items-center gap-1.5">
+                            <span className="text-sm font-medium truncate">{acc.name}</span>
+                            <Badge variant="outline" className="text-[9px] h-4 px-1 hidden sm:inline-flex">{acc.roleName}</Badge>
+                          </span>
+                          <span className="block text-xs text-muted-foreground truncate">{acc.email}</span>
+                        </span>
+                        <span className="flex items-center gap-1 text-[10px] text-muted-foreground shrink-0">
+                          {hasPass
+                            ? <><KeyRound className="h-3.5 w-3.5 text-emerald-600" /> directo</>
+                            : <><MousePointerClick className="h-3.5 w-3.5" /> pide clave</>}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="mr-2 h-7 w-7 shrink-0 rounded-full flex items-center justify-center text-muted-foreground/50 hover:text-red-600 hover:bg-red-50 transition"
+                        title={`Eliminar ${acc.email} del acceso rápido`}
+                        onClick={() => removeFromQuick(acc)}
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  );
+                })}
+                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                  El contador de ingresos y las contraseñas recordadas se guardan solo en este navegador
+                  (no en el servidor). Recomendable en dispositivos personales.
+                </p>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>

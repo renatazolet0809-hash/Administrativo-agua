@@ -41,8 +41,16 @@ export async function api<T = unknown>(
 }
 
 // Formateo
+// Símbolo de moneda configurable (Configuración → Personalización)
+let CURRENCY_SYMBOL = "$";
+export function setCurrencySymbol(symbol: string) {
+  if (symbol) CURRENCY_SYMBOL = symbol;
+}
+export function getCurrencySymbol(): string {
+  return CURRENCY_SYMBOL;
+}
 export function money(n: number): string {
-  return `$${n.toFixed(2)}`;
+  return `${CURRENCY_SYMBOL}${n.toFixed(2)}`;
 }
 
 export function fmtDate(d: string | Date): string {

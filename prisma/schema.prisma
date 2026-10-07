@@ -27,6 +27,8 @@ model User {
   phone        String?
   roleId       Int
   role         Role     @relation(fields: [roleId], references: [id])
+  customerId   Int?
+  customer     Customer? @relation(fields: [customerId], references: [id])
   active       Boolean  @default(true)
   lastLoginAt  DateTime?
   createdAt    DateTime @default(now())
@@ -37,6 +39,7 @@ model User {
   trackingPoints    TrackingPoint[]
   dispatches        Dispatch[]
   inventoryMovements InventoryMovement[]
+  notifications     Notification[]
 }
 
 // ============ CATÁLOGO E INVENTARIO ============
@@ -89,6 +92,7 @@ model Customer {
 
   orders Order[]
   routeStops RouteStop[]
+  users User[]
 }
 
 // ============ PEDIDOS ============
@@ -148,6 +152,7 @@ model DeliveryRoute {
   stops   RouteStop[]
   trackingPoints TrackingPoint[]
   dispatches Dispatch[]
+  proofs  DeliveryProof[]
 }
 
 model RouteStop {
@@ -163,6 +168,8 @@ model RouteStop {
   itemsSummary String @default("")
   deliveredAt DateTime?
   notes    String?
+
+  proof DeliveryProof?
 }
 
 model Dispatch {
@@ -176,6 +183,38 @@ model Dispatch {
   quantity  Int
   status    String   @default("CARGADO") // CARGADO | RETORNADO
   createdAt DateTime @default(now())
+}
+
+// ============ COMPROBANTES FOTOGRÁFICOS ============
+
+model DeliveryProof {
+  id        Int      @id @default(autoincrement())
+  stopId    Int      @unique
+  stop      RouteStop @relation(fields: [stopId], references: [id])
+  routeId   Int
+  route     DeliveryRoute @relation(fields: [routeId], references: [id])
+  photoData String // imagen JPEG comprimida (data URL)
+  lat       Float
+  lng       Float
+  accuracy  Float    @default(0)
+  note      String?
+  createdAt DateTime @default(now())
+}
+
+// ============ NOTIFICACIONES (PUSH) ============
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  type      String // RUTA_ASIGNADA | PEDIDO_NUEVO | PEDIDO_CONFIRMADO | PEDIDO_EN_RUTA | PEDIDO_ENTREGADO | PEDIDO_CANCELADO
+  title     String
+  body      String
+  data      String   @default("{}") // JSON: { routeId?, orderId? }
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read, createdAt])
 }
 
 // ============ TRACKING GPS ============

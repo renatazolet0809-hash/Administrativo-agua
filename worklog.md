@@ -30,3 +30,29 @@ Stage Summary:
 - Sistema completo funcionando en puerto 3000 (ruta /)
 - Cuentas demo: admin@aqua.com/admin123, supervisor@aqua.com/super123, bodega@aqua.com/bodega123, chofer@aqua.com/chofer123, chofer2@aqua.com/chofer123
 - Arquitectura: backend API REST único + 2 frontends (Web Admin escritorio, App Chofer móvil) que consumen los mismos endpoints con Bearer token
+
+---
+Task ID: 2
+Agent: Super Z (main agent)
+Task: Fase 2-4 — Notificaciones push de nuevas rutas, comprobantes fotográficos de entrega, reportes PDF de ventas y portal de clientes con autopedido
+
+Work Log:
+- Esquema Prisma ampliado: Notification (RUTA_ASIGNADA/PEDIDO_*), DeliveryProof (foto dataURL + lat/lng + nota, 1:1 con RouteStop), User.customerId para vincular usuario CLIENTE ↔ Customer
+- Nueva permission "orders.create" + rol CLIENTE (products.view, orders.view, orders.create); presets y seed actualizados
+- src/lib/notify.ts: helpers createNotification / notifyCustomerUsers / notifyStaffAboutNewOrder (punto único de envío; en producción sería FCM)
+- Endpoints nuevos: POST /api/auth/register (alta pública de clientes con customer + usuario), GET/PUT /api/notifications (bandeja + marcar leídas), POST/GET /api/stops/[id]/proof (subida de comprobante con validación foto+GPS obligatoria, marca ENTREGADO; consulta por chofer/admin/cliente del pedido), GET /api/reports/sales (agregados por día/producto/cliente/chofer + detalle)
+- Endpoints modificados: /api/orders (GET scoped para CLIENTE, POST permite autopedido del cliente y notifica al staff), /api/orders/[id] (notifica al cliente en cada cambio de estado), /api/routes (POST notifica al chofer RUTA_ASIGNADA + aviso a clientes; GET incluye proof), /api/routes/[id] (GET incluye proof)
+- Frontend compartido: NotificationBell con polling cada 6s + toasts sonner (simula push FCM), integrado en Admin, App Chofer y Portal Cliente; deep-link: tocar RUTA_ASIGNADA abre la ruta
+- DriverApp: modal "Comprobante de entrega" con cámara (input capture), compresión canvas 1024px JPEG 0.62, GPS obligatorio (real o simulación), nota opcional; botón Entregado reemplazado por Entregar
+- AdminPanel: sección Reportes de Ventas (presets de período, KPIs, tabs por producto/cliente/chofer/detalle, PDF con jsPDF+autoTable, export CSV) + botón Comprobante en paradas entregadas (foto + GPS + Google Maps)
+- ClientPortal nuevo (mobile-first): catálogo con stepper, carrito flotante, nota para el chofer, mis pedidos con estados, ver comprobante fotográfico de entregas
+- LoginScreen: tab "Soy cliente nuevo" con registro (nombre, correo, teléfono, dirección, zona con geolocalización aproximada) + acceso rápido cliente@aqua.com
+- page.tsx enruta roleName CLIENTE → ClientPortal
+- Corregido: seed usaba userId:1 fijo que rompía FK con SQLite autoincrement; ahora usa adminUser.id; reordenadas eliminaciones por FK; ruta COMPLETADA demo con comprobante para el portal del cliente
+- Reinicio del dev server requerido para recargar Prisma Client generado
+- Verificación: smoke test API 8/8 OK (notificaciones, reportes, scoping de pedidos, comprobante, alta de pedido por cliente, RBAC 403 intacto); Agent Browser: flujo cliente completo (carrito $17.50 + nota → pedido), comprobante con foto+GPS en portal y admin, notificación push al chofer con deep-link a ruta, entrega con foto+GPS simulado confirmada (2/3), PDF y CSV generados sin errores, cero errores de consola, responsive móvil verificado
+
+Stage Summary:
+- Sistema completo con las 4 nuevas funcionalidades operativas en puerto 3000
+- Cuentas: admin@aqua.com/admin123 · supervisor@aqua.com/super123 · bodega@aqua.com/bodega123 · chofer@aqua.com/chofer123 · chofer2@aqua.com/chofer123 · cliente@aqua.com/cliente123
+- Flujo end-to-end demostrado: cliente pide en el portal → staff recibe push → confirma → arma ruta → chofer recibe push → entrega con foto+GPS → cliente ve comprobante

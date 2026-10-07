@@ -1,6 +1,11 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { ApiError, jsonError, ok, requireAuth, hasPermission } from "@/lib/auth";
+import { createNotification, notifyCustomerUsers } from "@/lib/notify";
+
+function fmtShort(d: Date): string {
+  return d.toLocaleDateString("es-VE", { day: "2-digit", month: "short" });
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -23,6 +28,7 @@ export async function GET(request: NextRequest) {
         stops: {
           include: {
             customer: { select: { id: true, name: true, address: true, zone: true, lat: true, lng: true, phone: true } },
+            proof: { select: { id: true, lat: true, lng: true, createdAt: true } },
           },
           orderBy: { sequence: "asc" },
         },
@@ -95,6 +101,26 @@ export async function POST(request: NextRequest) {
       where: { id: { in: orders.map((o) => o.id) } },
       data: { status: "EN_RUTA" },
     });
+
+    // 🔔 Notificación push al chofer: nueva ruta asignada
+    await createNotification({
+      userId: driverId,
+      type: "RUTA_ASIGNADA",
+      title: "Nueva ruta asignada",
+      body: `${route.name} · ${route.stops.length} paradas · ${fmtShort(date)}`,
+      data: { routeId: route.id },
+    });
+
+    // 🔔 Aviso a los clientes del portal que sus pedidos salieron a ruta
+    for (const o of orders) {
+      await notifyCustomerUsers(
+        o.customerId,
+        "PEDIDO_EN_RUTA",
+        "Pedido en ruta 🚚",
+        `Su pedido #${o.id} fue programado en la ruta "${route.name}". Pronto recibirá la visita del chofer.`,
+        { orderId: o.id, routeId: route.id }
+      );
+    }
 
     return ok(route, 201);
   } catch (error) {

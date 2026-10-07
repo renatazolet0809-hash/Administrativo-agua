@@ -4,13 +4,19 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import {
   Droplets, LogOut, ArrowLeft, MapPin, Phone, Play, CheckCircle2,
   XCircle, Navigation2, Package2, Route as RouteIcon, Wifi, WifiOff, RefreshCw, Flag,
+  Camera, ImagePlus, Loader2, MapPinned,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { api, clearToken, fmtDate, STATUS_LABELS, STATUS_COLORS, haversine } from "@/components/shared/api";
+import { NotificationBell } from "@/components/shared/NotificationBell";
 import dynamic from "next/dynamic";
 import { toast } from "sonner";
 
@@ -31,6 +37,30 @@ interface DriverRoute {
 
 const CARACAS: [number, number] = [10.4806, -66.9036];
 
+// Comprime la foto tomada antes de subirla (ahorra datos móviles)
+function compressImage(file: File, maxSize = 1024, quality = 0.62): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return reject(new Error("Canvas no disponible"));
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.onerror = () => reject(new Error("No se pudo leer la imagen"));
+      img.src = String(reader.result);
+    };
+    reader.onerror = () => reject(new Error("No se pudo leer el archivo"));
+    reader.readAsDataURL(file);
+  });
+}
+
 export function DriverApp({ user, onLogout }: { user: { id: number; name: string }; onLogout: () => void }) {
   const [routes, setRoutes] = useState<DriverRoute[]>([]);
   const [activeRouteId, setActiveRouteId] = useState<number | null>(null);
@@ -38,6 +68,12 @@ export function DriverApp({ user, onLogout }: { user: { id: number; name: string
   const [gpsStatus, setGpsStatus] = useState<"off" | "real" | "error">("off");
   const [simMode, setSimMode] = useState(false);
   const [loading, setLoading] = useState(false);
+  // Modal de comprobante fotográfico de entrega
+  const [proofStop, setProofStop] = useState<Stop | null>(null);
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [proofNote, setProofNote] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement | null>(null);
   const watchId = useRef<number | null>(null);
   const lastSent = useRef<number>(0);
   const simTimer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -56,6 +92,13 @@ export function DriverApp({ user, onLogout }: { user: { id: number; name: string
   }, []);
 
   useEffect(() => { loadRoutes(); }, [loadRoutes]);
+
+  // Abrir una ruta desde una notificación push (campana)
+  const openRouteFromNotif = useCallback(async (routeId: number) => {
+    const r = await loadRoutes();
+    if (r.find((x) => x.id === routeId)) setActiveRouteId(routeId);
+    else toast.info("La ruta ya no está disponible");
+  }, [loadRoutes]);
 
   const sendPosition = useCallback(async (lat: number, lng: number, speed = 0, routeId?: number) => {
     try {
@@ -176,6 +219,53 @@ export function DriverApp({ user, onLogout }: { user: { id: number; name: string
     onLogout();
   }
 
+  // ----- Comprobante fotográfico de entrega -----
+  function openProofModal(stop: Stop) {
+    setProofStop(stop);
+    setPhoto(null);
+    setProofNote("");
+    // Asegurar una posición GPS aunque el tracking aún no haya reportado
+    if (!myPos && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (p) => setMyPos([p.coords.latitude, p.coords.longitude]),
+        () => { /* sin GPS: el modal lo indica */ },
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+    }
+  }
+
+  async function onPickPhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const dataUrl = await compressImage(file);
+      setPhoto(dataUrl);
+      toast.success("Foto lista para el comprobante");
+    } catch {
+      toast.error("No se pudo procesar la fotografía");
+    }
+    e.target.value = "";
+  }
+
+  async function submitProof() {
+    if (!proofStop || !photo) return;
+    setUploading(true);
+    try {
+      await api(`/api/stops/${proofStop.id}/proof`, {
+        method: "POST",
+        body: { photo, lat: myPos?.[0], lng: myPos?.[1], note: proofNote || undefined },
+      });
+      toast.success(`Entrega confirmada con comprobante — ${proofStop.customer.name}`);
+      setProofStop(null);
+      setPhoto(null);
+      await loadRoutes();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Error subiendo comprobante");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   const navUrl = (lat: number, lng: number, name: string) =>
     `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&destination_place_id=&travelmode=driving&query=${encodeURIComponent(name)}`;
 
@@ -212,7 +302,7 @@ export function DriverApp({ user, onLogout }: { user: { id: number; name: string
     return (
       <div className="min-h-screen bg-teal-50/50 flex flex-col">
         {/* Header móvil */}
-        <header className="sticky top-0 z-40 bg-teal-700 text-white px-4 py-3 flex items-center gap-3 shadow-lg">
+        <header className="sticky top-0 z-40 bg-teal-700 text-white px-4 py-3 flex items-center gap-2 shadow-lg">
           <Button size="icon" variant="ghost" className="text-white hover:bg-teal-600" onClick={() => setActiveRouteId(null)}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
@@ -220,6 +310,7 @@ export function DriverApp({ user, onLogout }: { user: { id: number; name: string
             <h1 className="font-bold truncate">{activeRoute.name}</h1>
             <p className="text-xs text-teal-100">{fmtDate(activeRoute.date)}{activeRoute.vehicle ? ` · ${activeRoute.vehicle.plate}` : ""}</p>
           </div>
+          <NotificationBell dark onOpenRoute={openRouteFromNotif} />
           <Button size="icon" variant="ghost" className="text-white hover:bg-teal-600" onClick={logout} title="Salir">
             <LogOut className="h-5 w-5" />
           </Button>
@@ -336,8 +427,8 @@ export function DriverApp({ user, onLogout }: { user: { id: number; name: string
                           </Button>
                         )}
                         <Button size="sm" className="flex-1 gap-1 h-9 bg-emerald-600 hover:bg-emerald-700"
-                          onClick={() => updateStop(s, "ENTREGADO")} disabled={loading}>
-                          <CheckCircle2 className="h-3.5 w-3.5" /> Entregado
+                          onClick={() => openProofModal(s)} disabled={loading}>
+                          <Camera className="h-3.5 w-3.5" /> Entregar
                         </Button>
                         <Button size="sm" variant="outline" className="flex-1 gap-1 h-9 text-red-600 hover:text-red-700"
                           onClick={() => updateStop(s, "NO_ENTREGADO")} disabled={loading}>
@@ -351,6 +442,66 @@ export function DriverApp({ user, onLogout }: { user: { id: number; name: string
             ))}
           </div>
         </main>
+
+        {/* Modal: comprobante fotográfico de entrega */}
+        <Dialog open={!!proofStop} onOpenChange={(o) => !o && setProofStop(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Camera className="h-5 w-5 text-teal-600" /> Comprobante de entrega
+              </DialogTitle>
+              <DialogDescription>
+                {proofStop?.customer.name} — {proofStop?.itemsSummary}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-3">
+              <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={onPickPhoto} />
+
+              {photo ? (
+                <div className="relative rounded-xl overflow-hidden border">
+                  { }
+                  <img src={photo} alt="Comprobante" className="w-full h-52 object-cover" />
+                  <Button size="sm" variant="secondary" className="absolute bottom-2 right-2 gap-1"
+                    onClick={() => fileRef.current?.click()}>
+                    <ImagePlus className="h-3.5 w-3.5" /> Cambiar foto
+                  </Button>
+                </div>
+              ) : (
+                <button type="button" onClick={() => fileRef.current?.click()}
+                  className="w-full h-44 rounded-xl border-2 border-dashed border-teal-300 bg-teal-50/60 flex flex-col items-center justify-center gap-2 text-teal-700 hover:bg-teal-50 transition">
+                  <Camera className="h-9 w-9" />
+                  <span className="text-sm font-medium">Tomar foto de la entrega</span>
+                  <span className="text-xs text-teal-600/70">La cámara del teléfono se abrirá automáticamente</span>
+                </button>
+              )}
+
+              <div className="rounded-lg bg-muted/60 border p-2.5 flex items-start gap-2 text-xs">
+                <MapPinned className={`h-4 w-4 mt-0.5 shrink-0 ${myPos ? "text-emerald-600" : "text-amber-600"}`} />
+                {myPos ? (
+                  <span>Ubicación GPS registrada: <strong>{myPos[0].toFixed(5)}, {myPos[1].toFixed(5)}</strong> — se adjuntará al comprobante.</span>
+                ) : (
+                  <span className="text-amber-700">Esperando señal GPS… si no aparece, no podrá confirmar la entrega.</span>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="proof-note" className="text-xs">Nota (opcional)</Label>
+                <Input id="proof-note" placeholder="Ej: recibido por el portero"
+                  value={proofNote} onChange={(e) => setProofNote(e.target.value)} />
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setProofStop(null)} disabled={uploading}>Cancelar</Button>
+              <Button className="bg-emerald-600 hover:bg-emerald-700 gap-1.5" onClick={submitProof}
+                disabled={!photo || !myPos || uploading}>
+                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                {uploading ? "Subiendo…" : "Confirmar entrega"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     );
   }
@@ -367,6 +518,7 @@ export function DriverApp({ user, onLogout }: { user: { id: number; name: string
             <h1 className="font-bold">AquaGestión · Chofer</h1>
             <p className="text-xs text-teal-100">{user.name}</p>
           </div>
+          <NotificationBell dark onOpenRoute={openRouteFromNotif} />
           <Button size="icon" variant="ghost" className="text-white hover:bg-teal-600" onClick={logout} title="Salir">
             <LogOut className="h-5 w-5" />
           </Button>

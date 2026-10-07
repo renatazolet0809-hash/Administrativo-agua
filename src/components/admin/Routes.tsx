@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Plus, Play, CheckCircle2, XCircle, Truck, MapPin, Clock } from "lucide-react";
+import { Plus, Play, CheckCircle2, XCircle, Truck, MapPin, Clock, Camera, Loader2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,7 @@ interface Vehicle { id: number; plate: string; model: string; }
 interface Stop {
   id: number; sequence: number; status: string; itemsSummary: string;
   customer: { name: string; zone: string; address: string };
+  proof?: { id: number; lat: number; lng: number; createdAt: string } | null;
 }
 interface Route {
   id: number; name: string; status: string; date: string; startedAt: string | null;
@@ -46,6 +47,21 @@ export function Routes({ canManage }: { canManage: boolean; canViewAll: boolean 
   const [form, setForm] = useState({ name: "", driverId: "", vehicleId: "" });
   const [selectedOrders, setSelectedOrders] = useState<number[]>([]);
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [proofData, setProofData] = useState<{ photoData: string; lat: number; lng: number; note: string | null; createdAt: string } | null>(null);
+  const [proofLoading, setProofLoading] = useState(false);
+
+  async function viewProof(stopId: number) {
+    setProofLoading(true);
+    setProofData(null);
+    try {
+      const p = await api<{ photoData: string; lat: number; lng: number; note: string | null; createdAt: string }>(`/api/stops/${stopId}/proof`);
+      setProofData(p);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Error cargando comprobante");
+    } finally {
+      setProofLoading(false);
+    }
+  }
 
   const load = useCallback(async () => {
     try {
@@ -168,6 +184,12 @@ export function Routes({ canManage }: { canManage: boolean; canViewAll: boolean 
                         <div className="font-medium truncate">{s.customer.name}</div>
                         <div className="text-xs text-muted-foreground truncate">{s.itemsSummary}</div>
                       </div>
+                      {s.proof && (
+                        <Button size="sm" variant="outline" className="shrink-0 h-7 gap-1 text-[11px] text-teal-700"
+                          onClick={() => viewProof(s.id)} title="Ver comprobante fotográfico">
+                          {proofLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Camera className="h-3 w-3" />} Comprobante
+                        </Button>
+                      )}
                       <Badge variant="outline" className={`shrink-0 text-[10px] ${STATUS_COLORS[s.status] || ""}`}>
                         {STATUS_LABELS[s.status] || s.status}
                       </Badge>
@@ -296,6 +318,48 @@ export function Routes({ canManage }: { canManage: boolean; canViewAll: boolean 
               Crear ruta
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Diálogo comprobante fotográfico */}
+      <Dialog open={!!proofData || proofLoading} onOpenChange={(o) => !o && setProofData(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Camera className="h-5 w-5 text-teal-600" /> Comprobante de entrega
+            </DialogTitle>
+            <DialogDescription>
+              Evidencia fotográfica registrada por el chofer al momento de la entrega
+            </DialogDescription>
+          </DialogHeader>
+          {proofData ? (
+            <div className="space-y-3">
+              { }
+              <img src={proofData.photoData} alt="Comprobante de entrega" className="w-full rounded-xl border" />
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="rounded-lg bg-muted p-2.5">
+                  <p className="text-muted-foreground">Ubicación GPS</p>
+                  <p className="font-medium tabular-nums">{proofData.lat.toFixed(5)}, {proofData.lng.toFixed(5)}</p>
+                </div>
+                <div className="rounded-lg bg-muted p-2.5">
+                  <p className="text-muted-foreground">Fecha de entrega</p>
+                  <p className="font-medium">{fmtDate(proofData.createdAt)}</p>
+                </div>
+              </div>
+              {proofData.note && (
+                <p className="text-xs rounded-lg bg-teal-50 border border-teal-100 text-teal-900 p-2.5">Nota: {proofData.note}</p>
+              )}
+              <a
+                href={`https://www.google.com/maps?q=${proofData.lat},${proofData.lng}`}
+                target="_blank" rel="noreferrer"
+                className="flex items-center gap-1.5 text-sm text-teal-700 font-medium hover:underline"
+              >
+                <MapPin className="h-4 w-4" /> Ver ubicación en Google Maps
+              </a>
+            </div>
+          ) : (
+            <div className="py-10 flex justify-center"><Loader2 className="h-6 w-6 animate-spin text-teal-600" /></div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

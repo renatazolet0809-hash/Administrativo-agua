@@ -28,9 +28,12 @@ const BODEGA_PERMS = [
 ];
 
 const CHOFER_PERMS = ["routes.view", "tracking.send", "delivery.execute"];
+const CLIENTE_PERMS = ["products.view", "orders.view", "orders.create"];
 
 async function main() {
   console.log("Limpiando base de datos...");
+  await db.notification.deleteMany();
+  await db.deliveryProof.deleteMany();
   await db.trackingPoint.deleteMany();
   await db.dispatch.deleteMany();
   await db.routeStop.deleteMany();
@@ -38,10 +41,10 @@ async function main() {
   await db.orderItem.deleteMany();
   await db.order.deleteMany();
   await db.inventoryMovement.deleteMany();
+  await db.user.deleteMany();
   await db.customer.deleteMany();
   await db.product.deleteMany();
   await db.vehicle.deleteMany();
-  await db.user.deleteMany();
   await db.role.deleteMany();
 
   console.log("Creando roles...");
@@ -57,9 +60,12 @@ async function main() {
   const choferRole = await db.role.create({
     data: { name: "CHOFER", description: "Conduce rutas de reparto y ejecuta entregas", permissions: JSON.stringify(CHOFER_PERMS) },
   });
+  const clienteRole = await db.role.create({
+    data: { name: "CLIENTE", description: "Cliente del portal web: consulta catálogo y hace sus pedidos", permissions: JSON.stringify(CLIENTE_PERMS) },
+  });
 
   console.log("Creando usuarios...");
-  await db.user.create({
+  const adminUser = await db.user.create({
     data: { name: "Administrador General", email: "admin@aqua.com", passwordHash: hashPassword("admin123"), roleId: adminRole.id, phone: "0212-5550100" },
   });
   await db.user.create({
@@ -73,6 +79,22 @@ async function main() {
   });
   const chofer2 = await db.user.create({
     data: { name: "José Ramírez", email: "chofer2@aqua.com", passwordHash: hashPassword("chofer123"), roleId: choferRole.id, phone: "0414-7654321" },
+  });
+
+  console.log("Creando usuario cliente del portal...");
+  const clienteCustomer = await db.customer.create({
+    data: {
+      name: "Elena Gutiérrez (Portal Web)", phone: "0412-3344556",
+      address: "Calle Choroní, Res. Vista Alegre, Apto 12-C", zone: "Los Palos Grandes",
+      lat: 10.4958, lng: -66.8562, email: "cliente@aqua.com",
+      notes: "Cliente del portal web — pedidos autogestionados",
+    },
+  });
+  await db.user.create({
+    data: {
+      name: "Elena Gutiérrez", email: "cliente@aqua.com", passwordHash: hashPassword("cliente123"),
+      phone: "0412-3344556", roleId: clienteRole.id, customerId: clienteCustomer.id,
+    },
   });
 
   console.log("Creando productos...");
@@ -121,7 +143,7 @@ async function main() {
       await db.order.create({
         data: {
           customerId: customers[od.customerId].id,
-          userId: 1,
+          userId: adminUser.id,
           status: od.status,
           total,
           items: { create: items },
@@ -193,7 +215,7 @@ async function main() {
   const hist = await db.order.create({
     data: {
       customerId: customers[6].id,
-      userId: 1,
+      userId: adminUser.id,
       status: "ENTREGADO",
       total: p20.price * 6 + p5.price * 4,
       items: { create: [[p20.id, 6], [p5.id, 4]].map(([id, q]) => ({ productId: id as number, quantity: q as number, unitPrice: [p20, p5].find(p => p.id === id)!.price })) },
@@ -204,7 +226,7 @@ async function main() {
     await db.order.create({
       data: {
         customerId: customers[d % customers.length].id,
-        userId: 1,
+        userId: adminUser.id,
         status: "ENTREGADO",
         total: 15 + d * 7,
         createdAt: day,
@@ -214,9 +236,119 @@ async function main() {
     });
   }
 
+  console.log("Comprobante fotográfico de entrega demo...");
+  const stop1 = await db.routeStop.findFirst({ where: { routeId: route1.id, sequence: 1 } });
+  if (stop1) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect width="800" height="600" fill="#0f766e"/><rect x="40" y="40" width="720" height="520" rx="24" fill="#ffffff"/><text x="400" y="200" font-family="Arial" font-size="42" font-weight="bold" fill="#0f766e" text-anchor="middle">Comprobante de entrega</text><text x="400" y="280" font-family="Arial" font-size="30" fill="#334155" text-anchor="middle">Bodegón La Esquina — Los Palos Grandes</text><text x="400" y="340" font-family="Arial" font-size="26" fill="#64748b" text-anchor="middle">4x Botellón 20L · 2x Botellón 5L</text><text x="400" y="420" font-family="Arial" font-size="24" fill="#0f766e" text-anchor="middle">Ruta Norte - Turno Mañana · Chofer: Luis Gómez</text><text x="400" y="470" font-family="Arial" font-size="20" fill="#94a3b8" text-anchor="middle">Foto demo generada por el sistema (GPS 10.4977, -66.8536)</text></svg>`;
+    await db.deliveryProof.create({
+      data: {
+        stopId: stop1.id,
+        routeId: route1.id,
+        photoData: `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`,
+        lat: 10.4977,
+        lng: -66.8536,
+        accuracy: 8,
+        note: "Entrega recibida en recepción",
+      },
+    });
+  }
+
+  console.log("Pedidos del cliente del portal...");
+  await db.order.create({
+    data: {
+      customerId: clienteCustomer.id,
+      userId: adminUser.id,
+      status: "PENDIENTE",
+      total: p20.price * 3 + p5.price * 4,
+      notes: "Pedido desde el portal web — dejar en recepción",
+      items: { create: [
+        { productId: p20.id, quantity: 3, unitPrice: p20.price },
+        { productId: p5.id, quantity: 4, unitPrice: p5.price },
+      ] },
+    },
+  });
+  const histClient = await db.order.create({
+    data: {
+      customerId: clienteCustomer.id,
+      userId: adminUser.id,
+      status: "ENTREGADO",
+      total: p10.price * 4,
+      createdAt: new Date(today.getTime() - 2 * 24 * 3600 * 1000),
+      updatedAt: new Date(today.getTime() - 2 * 24 * 3600 * 1000),
+      items: { create: [{ productId: p10.id, quantity: 4, unitPrice: p10.price }] },
+    },
+  });
+
+  // Ruta completada del cliente del portal (para demo de comprobante en el portal)
+  const routeCliente = await db.deliveryRoute.create({
+    data: {
+      name: "Ruta Los Palos Grandes - Portal",
+      driverId: chofer1.id,
+      vehicleId: v1.id,
+      date: new Date(today.getTime() - 2 * 24 * 3600 * 1000),
+      status: "COMPLETADA",
+      startedAt: new Date(today.getTime() - 2 * 24 * 3600 * 1000),
+      completedAt: new Date(today.getTime() - 2 * 24 * 3600 * 1000 + 3 * 3600 * 1000),
+      stops: {
+        create: [{
+          orderId: histClient.id,
+          customerId: clienteCustomer.id,
+          sequence: 1,
+          status: "ENTREGADO",
+          itemsSummary: "4× Botellón 10L",
+          deliveredAt: new Date(today.getTime() - 2 * 24 * 3600 * 1000 + 2 * 3600 * 1000),
+        }],
+      },
+    },
+  });
+  const stopCliente = await db.routeStop.findFirst({ where: { routeId: routeCliente.id } });
+  if (stopCliente) {
+    const svg2 = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect width="800" height="600" fill="#0e7490"/><rect x="40" y="40" width="720" height="520" rx="24" fill="#ffffff"/><text x="400" y="200" font-family="Arial" font-size="42" font-weight="bold" fill="#0e7490" text-anchor="middle">Comprobante de entrega</text><text x="400" y="280" font-family="Arial" font-size="30" fill="#334155" text-anchor="middle">Elena Gutiérrez — Los Palos Grandes</text><text x="400" y="340" font-family="Arial" font-size="26" fill="#64748b" text-anchor="middle">4x Botellón 10L</text><text x="400" y="420" font-family="Arial" font-size="24" fill="#0e7490" text-anchor="middle">Entregado en Res. Vista Alegre, Apto 12-C</text><text x="400" y="470" font-family="Arial" font-size="20" fill="#94a3b8" text-anchor="middle">Foto demo del sistema (GPS 10.4958, -66.8562)</text></svg>`;
+    await db.deliveryProof.create({
+      data: {
+        stopId: stopCliente.id,
+        routeId: routeCliente.id,
+        photoData: `data:image/svg+xml;base64,${Buffer.from(svg2).toString("base64")}`,
+        lat: 10.4958,
+        lng: -66.8562,
+        accuracy: 6,
+        note: "Recibido personalmente por la clienta",
+      },
+    });
+  }
+
+  console.log("Notificaciones demo...");
+  await db.notification.create({
+    data: {
+      userId: chofer1.id,
+      type: "RUTA_ASIGNADA",
+      title: "Nueva ruta asignada",
+      body: `Ruta Norte - Turno Mañana · 3 paradas · ${new Date().toLocaleDateString("es-VE", { day: "2-digit", month: "short" })}`,
+      data: JSON.stringify({ routeId: route1.id }),
+    },
+  });
+  await db.notification.create({
+    data: {
+      userId: adminUser.id,
+      type: "PEDIDO_NUEVO",
+      title: "Nuevo pedido del portal cliente",
+      body: "Elena Gutiérrez (Portal Web) solicitó un pedido. Revíselo en la sección Pedidos.",
+      data: JSON.stringify({}),
+    },
+  });
+  await db.notification.create({
+    data: {
+      userId: (await db.user.findUnique({ where: { email: "cliente@aqua.com" } }))!.id,
+      type: "PEDIDO_ENTREGADO",
+      title: "Pedido entregado ✓",
+      body: `Su pedido #${histClient.id} fue entregado. Ya puede ver el comprobante fotográfico en el portal.`,
+      data: JSON.stringify({ orderId: histClient.id }),
+    },
+  });
+
   console.log("Movimientos de inventario iniciales...");
-  await db.inventoryMovement.create({ data: { productId: p5.id, type: "ENTRADA", quantity: 120, reason: "Compra inicial", userId: 1 } });
-  await db.inventoryMovement.create({ data: { productId: p20.id, type: "ENTRADA", quantity: 200, reason: "Compra inicial", userId: 1 } });
+  await db.inventoryMovement.create({ data: { productId: p5.id, type: "ENTRADA", quantity: 120, reason: "Compra inicial", userId: adminUser.id } });
+  await db.inventoryMovement.create({ data: { productId: p20.id, type: "ENTRADA", quantity: 200, reason: "Compra inicial", userId: adminUser.id } });
 
   console.log("Seed completado ✓");
   console.log(`
@@ -225,7 +357,8 @@ USUARIOS DEMO:
   supervisor@aqua.com  / super123   (SUPERVISOR)
   bodega@aqua.com      / bodega123  (BODEGA)
   chofer@aqua.com      / chofer123  (CHOFER - app móvil)
-  chofer2@aqua.com     / chofer123  (CHOFER)`);
+  chofer2@aqua.com     / chofer123  (CHOFER)
+  cliente@aqua.com     / cliente123 (CLIENTE - portal web)`);
 }
 
 main()

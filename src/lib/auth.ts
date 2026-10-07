@@ -68,6 +68,7 @@ export interface SessionUser {
   phone: string | null;
   roleId: number;
   roleName: string;
+  customerId: number | null;
   permissions: string[];
 }
 
@@ -101,6 +102,7 @@ export async function getSessionUser(request: Request): Promise<SessionUser | nu
     phone: user.phone,
     roleId: user.roleId,
     roleName: user.role.name,
+    customerId: user.customerId,
     permissions: parsePermissions(user.role.permissions),
   };
 }

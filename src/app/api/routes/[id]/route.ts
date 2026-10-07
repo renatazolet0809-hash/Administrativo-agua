@@ -16,6 +16,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
           include: {
             customer: true,
             order: { include: { items: { include: { product: true } } } },
+            proof: { select: { id: true, lat: true, lng: true, createdAt: true } },
           },
           orderBy: { sequence: "asc" },
         },

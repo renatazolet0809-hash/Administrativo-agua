@@ -1,11 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { Droplets, MapPin, Users, ShieldCheck } from "lucide-react";
+import { Droplets, MapPin, Users, ShieldCheck, UserPlus, ShoppingBag, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { api, setToken } from "@/components/shared/api";
 import { toast } from "sonner";
 
@@ -20,16 +24,26 @@ interface LoginResponse {
   };
 }
 
+const ZONES = [
+  "Los Palos Grandes", "Chuao", "Chacao", "Las Mercedes",
+  "El Cafetal", "El Hatillo", "Caracas Centro",
+];
+
 const DEMO_USERS = [
   { email: "admin@aqua.com", password: "admin123", label: "Administrador", icon: ShieldCheck },
   { email: "supervisor@aqua.com", password: "super123", label: "Supervisor", icon: Users },
   { email: "chofer@aqua.com", password: "chofer123", label: "Chofer (App móvil)", icon: MapPin },
+  { email: "cliente@aqua.com", password: "cliente123", label: "Cliente (Portal web)", icon: ShoppingBag },
 ];
+
+const EMPTY_REG = { name: "", email: "", password: "", phone: "", address: "", zone: "" };
 
 export function LoginScreen({ onLogin }: { onLogin: () => void }) {
   const [email, setEmail] = useState("admin@aqua.com");
   const [password, setPassword] = useState("admin123");
   const [loading, setLoading] = useState(false);
+  const [reg, setReg] = useState(EMPTY_REG);
+  const [registering, setRegistering] = useState(false);
 
   async function handleLogin(e?: React.FormEvent, dEmail?: string, dPass?: string) {
     e?.preventDefault();
@@ -46,6 +60,24 @@ export function LoginScreen({ onLogin }: { onLogin: () => void }) {
       toast.error(err instanceof Error ? err.message : "Error al iniciar sesión");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleRegister(e: React.FormEvent) {
+    e.preventDefault();
+    setRegistering(true);
+    try {
+      const res = await api<LoginResponse>("/api/auth/register", {
+        method: "POST",
+        body: reg,
+      });
+      setToken(res.token);
+      toast.success(`¡Cuenta creada! Bienvenido al portal, ${res.user.name}`);
+      onLogin();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Error al registrar la cuenta");
+    } finally {
+      setRegistering(false);
     }
   }
 
@@ -73,15 +105,19 @@ export function LoginScreen({ onLogin }: { onLogin: () => void }) {
             </li>
             <li className="flex gap-3">
               <Droplets className="h-6 w-6 shrink-0 mt-0.5" />
-              <span><strong>Inventario inteligente</strong> — entrada, salida y despacho de botellones 5L, 10L, 12L y 20L.</span>
+              <span><strong>Comprobantes fotográficos</strong> — cada entrega con su evidencia fotográfica y ubicación GPS.</span>
+            </li>
+            <li className="flex gap-3">
+              <UserPlus className="h-6 w-6 shrink-0 mt-0.5" />
+              <span><strong>Portal de clientes</strong> — sus clientes se registran y hacen pedidos en línea, sin llamadas telefónicas.</span>
             </li>
             <li className="flex gap-3">
               <ShieldCheck className="h-6 w-6 shrink-0 mt-0.5" />
-              <span><strong>Roles y permisología por usuario</strong> — administrador, supervisor, bodega y chofer, cada uno con su alcance.</span>
+              <span><strong>Roles y permisología por usuario</strong> — administrador, supervisor, bodega, chofer y cliente, cada uno con su alcance.</span>
             </li>
           </ul>
         </div>
-        <p className="text-teal-200 text-xs">Backend API REST · Web Admin · App Chofer</p>
+        <p className="text-teal-200 text-xs">Backend API REST · Web Admin · App Chofer · Portal Cliente</p>
       </div>
 
       {/* Formulario */}
@@ -96,37 +132,96 @@ export function LoginScreen({ onLogin }: { onLogin: () => void }) {
 
           <Card className="shadow-xl border-teal-100">
             <CardHeader>
-              <CardTitle className="text-xl">Iniciar sesión</CardTitle>
-              <CardDescription>Ingrese sus credenciales para acceder al sistema</CardDescription>
+              <CardTitle className="text-xl">Bienvenido</CardTitle>
+              <CardDescription>Acceda al sistema o cree su cuenta de cliente</CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Correo electrónico</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="usuario@aqua.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Contraseña</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "Verificando..." : "Ingresar"}
-                </Button>
-              </form>
+              <Tabs defaultValue="login">
+                <TabsList className="grid grid-cols-2 w-full mb-4">
+                  <TabsTrigger value="login">Iniciar sesión</TabsTrigger>
+                  <TabsTrigger value="registro">Soy cliente nuevo</TabsTrigger>
+                </TabsList>
+
+                {/* ---- LOGIN ---- */}
+                <TabsContent value="login">
+                  <form onSubmit={handleLogin} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Correo electrónico</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="usuario@aqua.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="password">Contraseña</Label>
+                      <Input
+                        id="password"
+                        type="password"
+                        placeholder="••••••••"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <Button type="submit" className="w-full" disabled={loading}>
+                      {loading ? "Verificando..." : "Ingresar"}
+                    </Button>
+                  </form>
+                </TabsContent>
+
+                {/* ---- REGISTRO CLIENTE ---- */}
+                <TabsContent value="registro">
+                  <form onSubmit={handleRegister} className="space-y-3">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="reg-name" className="text-xs">Nombre y apellido</Label>
+                      <Input id="reg-name" placeholder="Ej: Elena Gutiérrez" value={reg.name}
+                        onChange={(e) => setReg({ ...reg, name: e.target.value })} required />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="reg-email" className="text-xs">Correo</Label>
+                        <Input id="reg-email" type="email" placeholder="correo@ejemplo.com" value={reg.email}
+                          onChange={(e) => setReg({ ...reg, email: e.target.value })} required />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="reg-phone" className="text-xs">Teléfono</Label>
+                        <Input id="reg-phone" placeholder="0412-0000000" value={reg.phone}
+                          onChange={(e) => setReg({ ...reg, phone: e.target.value })} required />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="reg-pass" className="text-xs">Contraseña (mín. 6 caracteres)</Label>
+                      <Input id="reg-pass" type="password" placeholder="••••••••" value={reg.password}
+                        onChange={(e) => setReg({ ...reg, password: e.target.value })} required minLength={6} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="reg-addr" className="text-xs">Dirección de entrega</Label>
+                      <Input id="reg-addr" placeholder="Calle, edificio, apto…" value={reg.address}
+                        onChange={(e) => setReg({ ...reg, address: e.target.value })} required />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Zona</Label>
+                      <Select value={reg.zone} onValueChange={(v) => setReg({ ...reg, zone: v })} required>
+                        <SelectTrigger><SelectValue placeholder="Seleccione su zona" /></SelectTrigger>
+                        <SelectContent>
+                          {ZONES.map((z) => <SelectItem key={z} value={z}>{z}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button type="submit" className="w-full gap-1.5" disabled={registering}>
+                      {registering ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
+                      {registering ? "Creando cuenta…" : "Crear mi cuenta y entrar"}
+                    </Button>
+                    <p className="text-[11px] text-muted-foreground text-center">
+                      Su dirección queda registrada para las rutas de despacho con GPS.
+                    </p>
+                  </form>
+                </TabsContent>
+              </Tabs>
             </CardContent>
           </Card>
 

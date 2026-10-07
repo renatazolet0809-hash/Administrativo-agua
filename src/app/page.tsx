@@ -5,13 +5,15 @@ import { Loader2 } from "lucide-react";
 import { LoginScreen } from "@/components/LoginScreen";
 import { AdminPanel, type SessionUser } from "@/components/admin/AdminPanel";
 import { DriverApp } from "@/components/driver/DriverApp";
+import { ClientPortal } from "@/components/client/ClientPortal";
 import { api, getToken } from "@/components/shared/api";
 
 type AppState =
   | { status: "loading" }
   | { status: "login" }
   | { status: "admin"; user: SessionUser }
-  | { status: "driver"; user: { id: number; name: string } };
+  | { status: "driver"; user: { id: number; name: string } }
+  | { status: "client"; user: { id: number; name: string } };
 
 export default function Home() {
   const [state, setState] = useState<AppState>({ status: "loading" });
@@ -23,6 +25,8 @@ export default function Home() {
       if (getToken()) {
         if (user.roleName === "CHOFER") {
           setState({ status: "driver", user: { id: user.id, name: user.name } });
+        } else if (user.roleName === "CLIENTE") {
+          setState({ status: "client", user: { id: user.id, name: user.name } });
         } else {
           setState({ status: "admin", user });
         }
@@ -57,6 +61,10 @@ export default function Home() {
 
   if (state.status === "driver") {
     return <DriverApp user={state.user} onLogout={() => setState({ status: "login" })} />;
+  }
+
+  if (state.status === "client") {
+    return <ClientPortal user={state.user} onLogout={() => setState({ status: "login" })} />;
   }
 
   return <AdminPanel user={state.user} onLogout={() => setState({ status: "login" })} />;

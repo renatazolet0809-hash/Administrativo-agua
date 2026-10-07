@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import {
   Droplets, LayoutDashboard, Package, Users2, ClipboardList, Truck,
-  Radar, UserCog, LogOut, Menu, X,
+  Radar, UserCog, LogOut, Menu, X, BarChart3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -15,6 +15,8 @@ import { Orders } from "@/components/admin/Orders";
 import { Routes } from "@/components/admin/Routes";
 import { Tracking } from "@/components/admin/Tracking";
 import { Users } from "@/components/admin/Users";
+import { Reports } from "@/components/admin/Reports";
+import { NotificationBell } from "@/components/shared/NotificationBell";
 import { api, clearToken } from "@/components/shared/api";
 
 export interface SessionUser {
@@ -28,6 +30,7 @@ const NAV = [
   { id: "orders", label: "Pedidos", icon: ClipboardList, perm: "orders.view" },
   { id: "routes", label: "Rutas de Despacho", icon: Truck, perm: "routes.view" },
   { id: "tracking", label: "Seguimiento GPS", icon: Radar, perm: "tracking.view" },
+  { id: "reports", label: "Reportes de Ventas", icon: BarChart3, perm: "reports.view" },
   { id: "users", label: "Usuarios y Roles", icon: UserCog, perm: "users.manage" },
 ] as const;
 
@@ -70,11 +73,12 @@ export function AdminPanel({ user, onLogout }: { user: SessionUser; onLogout: ()
               <p className="text-[10px] text-muted-foreground">Panel Administrativo</p>
             </div>
           </div>
-          <div className="ml-auto flex items-center gap-3">
+          <div className="ml-auto flex items-center gap-2">
             <div className="text-right hidden sm:block">
               <p className="text-sm font-medium leading-none">{user.name}</p>
               <p className="text-xs text-muted-foreground">{user.email}</p>
             </div>
+            <NotificationBell />
             <Avatar className="h-9 w-9">
               <AvatarFallback className="bg-teal-100 text-teal-800 text-xs font-bold">{initials}</AvatarFallback>
             </Avatar>
@@ -123,6 +127,7 @@ export function AdminPanel({ user, onLogout }: { user: SessionUser; onLogout: ()
           {section === "orders" && <Orders canManage={hasPerm("orders.manage")} />}
           {section === "routes" && <Routes canManage={hasPerm("routes.manage")} canViewAll={hasPerm("routes.view")} />}
           {section === "tracking" && <Tracking />}
+          {section === "reports" && <Reports canView={hasPerm("reports.view")} />}
           {section === "users" && <Users canManageRoles={hasPerm("roles.manage")} />}
         </main>
       </div>

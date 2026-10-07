@@ -9,6 +9,7 @@ export const PERMISSIONS = {
   CUSTOMERS_MANAGE: "customers.manage",
   ORDERS_VIEW: "orders.view",
   ORDERS_MANAGE: "orders.manage",
+  ORDERS_CREATE: "orders.create",
   ROUTES_VIEW: "routes.view",
   ROUTES_MANAGE: "routes.manage",
   TRACKING_VIEW: "tracking.view",
@@ -32,6 +33,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "customers.manage": "Gestionar clientes",
   "orders.view": "Ver pedidos",
   "orders.manage": "Gestionar pedidos",
+  "orders.create": "Crear pedidos (portal cliente)",
   "routes.view": "Ver rutas de despacho",
   "routes.manage": "Gestionar rutas de despacho",
   "tracking.view": "Ver seguimiento GPS",
@@ -69,6 +71,11 @@ export const ROLE_PRESETS: Record<string, Permission[]> = {
     PERMISSIONS.ROUTES_VIEW,
     PERMISSIONS.TRACKING_SEND,
     PERMISSIONS.DELIVERY_EXECUTE,
+  ],
+  CLIENTE: [
+    PERMISSIONS.PRODUCTS_VIEW,
+    PERMISSIONS.ORDERS_VIEW,
+    PERMISSIONS.ORDERS_CREATE,
   ],
 };
 

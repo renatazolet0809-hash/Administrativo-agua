@@ -52,3 +52,13 @@ prompt
 server.log
 # Skills directory
 /skills/
+# ---- Proyecto: no versionar datos runtime ni artefactos del sandbox ----
+/db
+/download
+/upload
+/examples
+/mini-services
+/tests
+/worklog.md
+/Caddyfile
+/.zscripts

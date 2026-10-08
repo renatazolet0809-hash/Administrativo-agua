@@ -243,22 +243,22 @@ export function Reports({ canView }: { canView: boolean }) {
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Desde</Label>
-            <Input type="date" value={from} className="w-40"
+            <Input type="date" value={from} className="w-full sm:w-40"
               onChange={(e) => { setFrom(e.target.value); setPreset("custom"); }} />
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs">Hasta</Label>
-            <Input type="date" value={to} className="w-40"
+            <Input type="date" value={to} className="w-full sm:w-40"
               onChange={(e) => { setTo(e.target.value); setPreset("custom"); }} />
           </div>
-          <Button variant="outline" className="gap-1.5" onClick={() => load(from, to)} disabled={loading}>
+          <Button variant="outline" className="gap-1.5 flex-1 sm:flex-none" onClick={() => load(from, to)} disabled={loading}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Actualizar
           </Button>
-          <div className="flex-1" />
-          <Button className="gap-1.5 bg-teal-600 hover:bg-teal-700" onClick={downloadPDF} disabled={!data || loading}>
+          <div className="hidden sm:block flex-1" />
+          <Button className="gap-1.5 flex-1 sm:flex-none bg-teal-600 hover:bg-teal-700" onClick={downloadPDF} disabled={!data || loading}>
             <FileDown className="h-4 w-4" /> Descargar PDF
           </Button>
-          <Button variant="outline" className="gap-1.5" onClick={downloadCSV} disabled={!data || loading}>
+          <Button variant="outline" className="gap-1.5 flex-1 sm:flex-none" onClick={downloadCSV} disabled={!data || loading}>
             <FileSpreadsheet className="h-4 w-4" /> CSV
           </Button>
         </CardContent>
@@ -267,14 +267,14 @@ export function Reports({ canView }: { canView: boolean }) {
       {/* KPIs */}
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
         {kpis.map((k) => (
-          <Card key={k.label}>
-            <CardContent className="pt-4 flex items-center gap-3">
-              <span className={`h-10 w-10 rounded-lg flex items-center justify-center ${k.color}`}>
-                <k.icon className="h-5 w-5" />
+          <Card key={k.label} className="min-w-0">
+            <CardContent className="pt-4 flex items-center gap-2.5 sm:gap-3">
+              <span className={`h-9 w-9 sm:h-10 sm:w-10 shrink-0 rounded-lg flex items-center justify-center ${k.color}`}>
+                <k.icon className="h-4.5 w-4.5 sm:h-5 sm:w-5" />
               </span>
               <div className="min-w-0">
-                <p className="text-xs text-muted-foreground truncate">{k.label}</p>
-                <p className="text-lg font-bold tabular-nums">{k.value}</p>
+                <p className="text-[11px] sm:text-xs text-muted-foreground leading-snug">{k.label}</p>
+                <p className="text-base sm:text-lg font-bold tabular-nums">{k.value}</p>
               </div>
             </CardContent>
           </Card>
@@ -295,7 +295,7 @@ export function Reports({ canView }: { canView: boolean }) {
       {/* Tablas agregadas */}
       {data && (
         <Tabs defaultValue="productos">
-          <TabsList>
+          <TabsList className="grid grid-cols-2 w-full h-auto sm:inline-flex sm:w-fit sm:h-9">
             <TabsTrigger value="productos">Por producto</TabsTrigger>
             <TabsTrigger value="clientes">Por cliente</TabsTrigger>
             <TabsTrigger value="choferes">Por chofer</TabsTrigger>

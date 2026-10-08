@@ -164,7 +164,7 @@ export function AdminPanel({ user, onLogout }: { user: SessionUser; onLogout: ()
         </aside>
 
         {/* Contenido */}
-        <main className="flex-1 p-4 lg:p-6 max-w-[1600px] mx-auto w-full">
+        <main className="flex-1 p-4 lg:p-6 max-w-[1600px] mx-auto w-full min-w-0">
           {section === "dashboard" && <Dashboard />}
           {section === "products" && (
             <Products canManage={hasPerm("products.manage")} canInventory={hasPerm("inventory.manage")} />
@@ -192,7 +192,7 @@ export function AdminPanel({ user, onLogout }: { user: SessionUser; onLogout: ()
         </main>
       </div>
 
-      <footer className="border-t py-3 text-center text-xs text-muted-foreground mt-auto">
+      <footer className="border-t py-3 px-4 text-center text-xs text-muted-foreground mt-auto leading-relaxed">
         {systemName} — Sistema de control y despacho de agua embotellada · Backend API REST + Web Admin + App Chofer
       </footer>
     </div>

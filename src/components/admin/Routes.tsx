@@ -133,9 +133,9 @@ export function Routes({ canManage }: { canManage: boolean; canViewAll: boolean 
   return (
     <div className="space-y-4">
       {canManage && (
-        <div className="flex justify-end">
+        <div className="flex sm:justify-end">
           <Button onClick={() => { setForm({ name: "", driverId: "", vehicleId: "" }); setSelectedOrders([]); setDialogOpen(true); }}
-            className="gap-1.5">
+            className="gap-1.5 w-full sm:w-auto">
             <Plus className="h-4 w-4" /> Nueva ruta de despacho
           </Button>
         </div>
@@ -146,7 +146,7 @@ export function Routes({ canManage }: { canManage: boolean; canViewAll: boolean 
           const delivered = r.stops.filter((s) => s.status === "ENTREGADO").length;
           const progress = r.stops.length ? (delivered / r.stops.length) * 100 : 0;
           return (
-            <Card key={r.id}>
+            <Card key={r.id} className="min-w-0">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-2">
                   <div>
@@ -176,18 +176,19 @@ export function Routes({ canManage }: { canManage: boolean; canViewAll: boolean 
               <CardContent className="space-y-3">
                 <div className="space-y-1.5">
                   {r.stops.slice(0, expanded === r.id ? undefined : 3).map((s) => (
-                    <div key={s.id} className="flex items-center gap-2.5 text-sm border rounded-lg p-2.5">
+                    <div key={s.id} className="flex flex-wrap items-center gap-2.5 text-sm border rounded-lg p-2.5">
                       <span className="h-6 w-6 shrink-0 rounded-full bg-teal-50 text-teal-700 text-xs font-bold flex items-center justify-center">
                         {s.sequence}
                       </span>
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1 min-w-[8rem]">
                         <div className="font-medium truncate">{s.customer.name}</div>
                         <div className="text-xs text-muted-foreground truncate">{s.itemsSummary}</div>
                       </div>
                       {s.proof && (
                         <Button size="sm" variant="outline" className="shrink-0 h-7 gap-1 text-[11px] text-teal-700"
                           onClick={() => viewProof(s.id)} title="Ver comprobante fotográfico">
-                          {proofLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Camera className="h-3 w-3" />} Comprobante
+                          {proofLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Camera className="h-3 w-3" />}
+                          <span className="hidden sm:inline">Comprobante</span>
                         </Button>
                       )}
                       <Badge variant="outline" className={`shrink-0 text-[10px] ${STATUS_COLORS[s.status] || ""}`}>
@@ -204,16 +205,16 @@ export function Routes({ canManage }: { canManage: boolean; canViewAll: boolean 
                 </div>
 
                 {canManage && (
-                  <div className="flex gap-2 pt-1">
+                  <div className="flex flex-wrap gap-2 pt-1">
                     {r.status === "PLANIFICADA" && (
-                      <Button size="sm" className="gap-1.5 flex-1" onClick={() => routeAction(r, "START")}>
-                        <Play className="h-3.5 w-3.5" /> Iniciar ruta (cargar botellones)
+                      <Button size="sm" className="gap-1.5 flex-1 min-w-0" onClick={() => routeAction(r, "START")}>
+                        <Play className="h-3.5 w-3.5 shrink-0" /> Iniciar ruta <span className="hidden lg:inline">(cargar botellones)</span>
                       </Button>
                     )}
                     {r.status === "EN_CURSO" && (
-                      <Button size="sm" variant="outline" className="gap-1.5 flex-1"
+                      <Button size="sm" variant="outline" className="gap-1.5 flex-1 min-w-0"
                         onClick={() => routeAction(r, "COMPLETE", { force: true })}>
-                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> Finalizar ruta
+                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" /> Finalizar ruta
                       </Button>
                     )}
                     {["PLANIFICADA", "COMPLETADA"].includes(r.status) && (
@@ -245,8 +246,8 @@ export function Routes({ canManage }: { canManage: boolean; canViewAll: boolean 
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-2 overflow-hidden flex-1">
-            <div className="grid grid-cols-3 gap-3">
-              <div className="space-y-2 col-span-3 sm:col-span-1">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-2">
                 <Label>Nombre de ruta</Label>
                 <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
                   placeholder="Ruta Norte - Mañana" />

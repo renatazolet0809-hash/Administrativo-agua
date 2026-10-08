@@ -47,14 +47,18 @@ export function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-4 grid-cols-2 xl:grid-cols-6">
+      <div className="grid gap-3 grid-cols-2 xl:grid-cols-6">
         {kpis.map((k) => (
-          <Card key={k.label} className="p-4">
-            <div className={`inline-flex p-2 rounded-lg mb-3 ${k.color}`}>
-              <k.icon className="h-5 w-5" />
+          <Card key={k.label} className="p-4 gap-0 min-w-0">
+            <div className="flex items-center gap-2.5">
+              <div className={`shrink-0 p-2 rounded-lg ${k.color}`}>
+                <k.icon className="h-4.5 w-4.5" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-xl sm:text-2xl font-bold leading-none tabular-nums">{k.value}</div>
+                <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 leading-snug">{k.label}</p>
+              </div>
             </div>
-            <div className="text-2xl font-bold">{k.value}</div>
-            <p className="text-xs text-muted-foreground mt-0.5">{k.label}</p>
           </Card>
         ))}
       </div>
@@ -115,17 +119,17 @@ export function Dashboard() {
           </CardHeader>
           <CardContent className="space-y-3">
             {data.inventory.map((p) => (
-              <div key={p.id} className="flex items-center gap-4">
-                <div className="w-24 text-sm font-medium">{p.sizeLiters}L</div>
-                <div className="flex-1 h-2.5 bg-muted rounded-full overflow-hidden">
+              <div key={p.id} className="flex items-center gap-3 sm:gap-4">
+                <div className="w-12 sm:w-24 text-sm font-medium">{p.sizeLiters}L</div>
+                <div className="flex-1 min-w-0 h-2.5 bg-muted rounded-full overflow-hidden">
                   <div
                     className={`h-full rounded-full ${p.low ? "bg-red-500" : "bg-teal-600"}`}
                     style={{ width: `${Math.min(100, (p.stock / (p.minStock * 4)) * 100)}%` }}
                   />
                 </div>
-                <div className="text-sm tabular-nums w-32 text-right">
+                <div className="text-xs sm:text-sm tabular-nums w-20 sm:w-32 text-right shrink-0">
                   {p.stock} und
-                  {p.low && <Badge variant="destructive" className="ml-2 text-[10px] px-1.5">Bajo</Badge>}
+                  {p.low && <Badge variant="destructive" className="ml-1.5 text-[10px] px-1.5">Bajo</Badge>}
                 </div>
               </div>
             ))}
@@ -140,11 +144,11 @@ export function Dashboard() {
             <div className="space-y-2.5 max-h-72 overflow-y-auto">
               {data.recentOrders.map((o) => (
                 <div key={o.id} className="flex items-center justify-between gap-2 text-sm border-b pb-2.5 last:border-0">
-                  <div>
-                    <span className="font-medium">#{o.id}</span> · {o.customer}
+                  <div className="min-w-0">
+                    <span className="font-medium">#{o.id}</span> · <span className="align-top">{o.customer}</span>
                     <div className="text-xs text-muted-foreground">{fmtDate(o.createdAt)}</div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     <span className="tabular-nums font-medium">{money(o.total)}</span>
                     <Badge variant="outline" className={`text-[10px] ${STATUS_COLORS[o.status] || ""}`}>
                       {STATUS_LABELS[o.status] || o.status}

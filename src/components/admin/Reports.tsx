@@ -233,7 +233,7 @@ export function Reports({ canView }: { canView: boolean }) {
       <Card>
         <CardContent className="pt-4">
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-[10rem_10rem_10rem_auto_1fr_auto_auto] items-end gap-3">
-            <div className="col-span-2 md:col-span-1 space-y-1.5">
+            <div className="col-span-2 md:col-span-1 min-w-0 space-y-1.5">
               <Label className="text-xs">Período</Label>
               <Select value={preset} onValueChange={changePreset}>
                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
@@ -242,12 +242,12 @@ export function Reports({ canView }: { canView: boolean }) {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
+            <div className="min-w-0 space-y-1.5">
               <Label className="text-xs">Desde</Label>
               <Input type="date" value={from} className="w-full"
                 onChange={(e) => { setFrom(e.target.value); setPreset("custom"); }} />
             </div>
-            <div className="space-y-1.5">
+            <div className="min-w-0 space-y-1.5">
               <Label className="text-xs">Hasta</Label>
               <Input type="date" value={to} className="w-full"
                 onChange={(e) => { setTo(e.target.value); setPreset("custom"); }} />

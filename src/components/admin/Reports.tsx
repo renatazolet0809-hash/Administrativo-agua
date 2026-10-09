@@ -229,38 +229,40 @@ export function Reports({ canView }: { canView: boolean }) {
 
   return (
     <div className="space-y-4">
-      {/* Filtros */}
+      {/* Filtros — grilla ordenada en móvil, una sola fila en escritorio */}
       <Card>
-        <CardContent className="pt-4 flex flex-wrap items-end gap-3">
-          <div className="space-y-1.5">
-            <Label className="text-xs">Período</Label>
-            <Select value={preset} onValueChange={changePreset}>
-              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {PRESETS.map((p) => <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
+        <CardContent className="pt-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-[10rem_10rem_10rem_auto_1fr_auto_auto] items-end gap-3">
+            <div className="col-span-2 md:col-span-1 space-y-1.5">
+              <Label className="text-xs">Período</Label>
+              <Select value={preset} onValueChange={changePreset}>
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {PRESETS.map((p) => <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Desde</Label>
+              <Input type="date" value={from} className="w-full"
+                onChange={(e) => { setFrom(e.target.value); setPreset("custom"); }} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Hasta</Label>
+              <Input type="date" value={to} className="w-full"
+                onChange={(e) => { setTo(e.target.value); setPreset("custom"); }} />
+            </div>
+            <Button variant="outline" className="col-span-2 md:col-span-1 w-full xl:w-auto gap-1.5" onClick={() => load(from, to)} disabled={loading}>
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Actualizar
+            </Button>
+            <div className="hidden xl:block" />
+            <Button className="w-full xl:w-auto gap-1.5 bg-teal-600 hover:bg-teal-700" onClick={downloadPDF} disabled={!data || loading}>
+              <FileDown className="h-4 w-4" /> Descargar PDF
+            </Button>
+            <Button variant="outline" className="w-full xl:w-auto gap-1.5" onClick={downloadCSV} disabled={!data || loading}>
+              <FileSpreadsheet className="h-4 w-4" /> CSV
+            </Button>
           </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Desde</Label>
-            <Input type="date" value={from} className="w-full sm:w-40"
-              onChange={(e) => { setFrom(e.target.value); setPreset("custom"); }} />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">Hasta</Label>
-            <Input type="date" value={to} className="w-full sm:w-40"
-              onChange={(e) => { setTo(e.target.value); setPreset("custom"); }} />
-          </div>
-          <Button variant="outline" className="gap-1.5 flex-1 sm:flex-none" onClick={() => load(from, to)} disabled={loading}>
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Actualizar
-          </Button>
-          <div className="hidden sm:block flex-1" />
-          <Button className="gap-1.5 flex-1 sm:flex-none bg-teal-600 hover:bg-teal-700" onClick={downloadPDF} disabled={!data || loading}>
-            <FileDown className="h-4 w-4" /> Descargar PDF
-          </Button>
-          <Button variant="outline" className="gap-1.5 flex-1 sm:flex-none" onClick={downloadCSV} disabled={!data || loading}>
-            <FileSpreadsheet className="h-4 w-4" /> CSV
-          </Button>
         </CardContent>
       </Card>
 

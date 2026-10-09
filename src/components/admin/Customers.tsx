@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { api, fmtDay } from "@/components/shared/api";
+import { AddressAutocomplete } from "@/components/shared/AddressAutocomplete";
 import dynamic from "next/dynamic";
 import { toast } from "sonner";
 
@@ -153,7 +154,7 @@ export function Customers({ canManage }: { canManage: boolean }) {
           <DialogHeader>
             <DialogTitle>{selected ? "Editar cliente" : "Nuevo cliente"}</DialogTitle>
             <DialogDescription>
-              Haga clic en el mapa para ubicar la dirección exacta del cliente
+              Escriba la dirección del cliente para autocompletar la ubicación o haga clic en el mapa
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 md:grid-cols-2">
@@ -174,7 +175,23 @@ export function Customers({ canManage }: { canManage: boolean }) {
               </div>
               <div className="space-y-2">
                 <Label>Dirección</Label>
-                <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+                <AddressAutocomplete
+                  value={form.address}
+                  onChange={(v) =>
+                    setForm((f) => ({
+                      ...f,
+                      address: v.address,
+                      ...(v.lat !== undefined && v.lng !== undefined
+                        ? { lat: v.lat.toFixed(6), lng: v.lng.toFixed(6) }
+                        : {}),
+                      ...(v.zone && !f.zone ? { zone: v.zone } : {}),
+                    }))
+                  }
+                  placeholder="Ej: Av. Libertador, Chacao…"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Escriba y seleccione una sugerencia para completar las coordenadas automáticamente.
+                </p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">

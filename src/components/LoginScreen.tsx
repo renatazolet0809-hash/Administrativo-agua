@@ -16,6 +16,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { api, setToken } from "@/components/shared/api";
+import { AddressAutocomplete } from "@/components/shared/AddressAutocomplete";
 import { useSystemConfig } from "@/components/shared/system-config";
 import {
   recordLogin, getQuickAccounts, removeQuickAccount, decodePass, type QuickAccount,
@@ -49,6 +50,9 @@ export function LoginScreen({ onLogin }: { onLogin: () => void }) {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [reg, setReg] = useState(EMPTY_REG);
   const [registering, setRegistering] = useState(false);
+  // Coordenadas GPS de la dirección elegida con el autocompletado de Google
+  // (opcionales: si el servidor no tiene clave de Google, se usan las de la zona)
+  const [regCoords, setRegCoords] = useState<{ lat?: number; lng?: number }>({});
 
   // Acceso rápido dinámico (por frecuencia de uso en este navegador)
   const threshold = Number(config.quickAccessThreshold ?? "1");
@@ -124,7 +128,7 @@ export function LoginScreen({ onLogin }: { onLogin: () => void }) {
     try {
       const res = await api<LoginResponse>("/api/auth/register", {
         method: "POST",
-        body: reg,
+        body: { ...reg, lat: regCoords.lat, lng: regCoords.lng },
       });
       setToken(res.token);
       recordLogin({
@@ -288,8 +292,26 @@ export function LoginScreen({ onLogin }: { onLogin: () => void }) {
                     </div>
                     <div className="space-y-1.5">
                       <Label htmlFor="reg-addr" className="text-xs">Dirección de entrega</Label>
-                      <Input id="reg-addr" placeholder="Calle, edificio, apto…" value={reg.address}
-                        onChange={(e) => setReg({ ...reg, address: e.target.value })} required />
+                      <AddressAutocomplete
+                        id="reg-addr"
+                        value={reg.address}
+                        onChange={(v) => {
+                          setRegCoords(
+                            v.lat !== undefined && v.lng !== undefined
+                              ? { lat: v.lat, lng: v.lng }
+                              : {}
+                          );
+                          const zoneMatch = v.zone
+                            ? ZONES.find((z) => z.toLowerCase() === v.zone!.toLowerCase())
+                            : undefined;
+                          setReg((r) => ({ ...r, address: v.address, zone: zoneMatch || r.zone }));
+                        }}
+                        placeholder="Calle, edificio, apto…"
+                        required
+                      />
+                      <p className="text-[11px] text-muted-foreground">
+                        Escriba su dirección y seleccione una sugerencia para ubicar su entrega con precisión.
+                      </p>
                     </div>
                     <div className="space-y-1.5">
                       <Label className="text-xs">Zona</Label>

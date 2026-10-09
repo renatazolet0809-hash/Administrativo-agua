@@ -37,7 +37,19 @@ export async function POST(request: NextRequest) {
     const clientRole = await db.role.findUnique({ where: { name: "CLIENTE" } });
     if (!clientRole) throw new ApiError("Rol CLIENTE no configurado en el sistema", 500);
 
-    // Coordenadas aproximadas por zona (demo). En producción: geocoding API.
+    // Coordenadas de la dirección elegida con el autocompletado de Google
+    // Places (enviadas por el portal). Si no vienen (clave de Google no
+    // configurada o ingreso manual), se usan las aproximadas por zona.
+    const bodyLat = Number(body.lat);
+    const bodyLng = Number(body.lng);
+    const hasGoogleCoords =
+      Number.isFinite(bodyLat) &&
+      Number.isFinite(bodyLng) &&
+      Math.abs(bodyLat) <= 90 &&
+      Math.abs(bodyLng) <= 180 &&
+      (bodyLat !== 0 || bodyLng !== 0);
+
+    // Respaldo: coordenadas aproximadas por zona
     const zoneCoords: Record<string, [number, number]> = {
       "LOS PALOS GRANDES": [10.4977, -66.8536],
       CHUAO: [10.4892, -66.8639],
@@ -47,7 +59,9 @@ export async function POST(request: NextRequest) {
       "EL HATILLO": [10.4321, -66.8351],
       "CARACAS CENTRO": [10.5061, -66.8786],
     };
-    const [lat, lng] = zoneCoords[zone.toUpperCase()] || [10.4806, -66.9036];
+    const [fallbackLat, fallbackLng] = zoneCoords[zone.toUpperCase()] || [10.4806, -66.9036];
+    const lat = hasGoogleCoords ? bodyLat : fallbackLat;
+    const lng = hasGoogleCoords ? bodyLng : fallbackLng;
 
     const result = await db.$transaction(async (tx) => {
       const customer = await tx.customer.create({

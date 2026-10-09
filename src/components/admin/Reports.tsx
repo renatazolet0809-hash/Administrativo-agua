@@ -244,12 +244,12 @@ export function Reports({ canView }: { canView: boolean }) {
             </div>
             <div className="min-w-0 space-y-1.5">
               <Label className="text-xs">Desde</Label>
-              <Input type="date" value={from} className="w-full"
+              <Input type="date" value={from} className="w-full min-w-0 max-w-full text-sm" 
                 onChange={(e) => { setFrom(e.target.value); setPreset("custom"); }} />
             </div>
             <div className="min-w-0 space-y-1.5">
               <Label className="text-xs">Hasta</Label>
-              <Input type="date" value={to} className="w-full"
+              <Input type="date" value={to} className="w-full min-w-0 max-w-full text-sm" 
                 onChange={(e) => { setTo(e.target.value); setPreset("custom"); }} />
             </div>
             <Button variant="outline" className="col-span-2 md:col-span-1 w-full xl:w-auto gap-1.5" onClick={() => load(from, to)} disabled={loading}>
